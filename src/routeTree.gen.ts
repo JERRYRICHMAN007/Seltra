@@ -9,61 +9,384 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppSystemRouteImport } from './routes/_app/system'
+import { Route as AppRetentionRouteImport } from './routes/_app/retention'
+import { Route as AppPaymentsRouteImport } from './routes/_app/payments'
+import { Route as AppOrdersRouteImport } from './routes/_app/orders'
+import { Route as AppMerchantsRouteImport } from './routes/_app/merchants'
+import { Route as AppFeaturesRouteImport } from './routes/_app/features'
+import { Route as AppDeveloperRouteImport } from './routes/_app/developer'
+import { Route as AppApiMonitorRouteImport } from './routes/_app/api-monitor'
+import { Route as AppAiRouteImport } from './routes/_app/ai'
+import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings.index'
+import { Route as AppSettingsTeamRouteImport } from './routes/_app/settings.team'
+import { Route as AppMerchantsSuccessRouteImport } from './routes/_app/merchants.success'
+import { Route as AppMerchantsApplicationsRouteImport } from './routes/_app/merchants.applications'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSystemRoute = AppSystemRouteImport.update({
+  id: '/system',
+  path: '/system',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRetentionRoute = AppRetentionRouteImport.update({
+  id: '/retention',
+  path: '/retention',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPaymentsRoute = AppPaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrdersRoute = AppOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMerchantsRoute = AppMerchantsRouteImport.update({
+  id: '/merchants',
+  path: '/merchants',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFeaturesRoute = AppFeaturesRouteImport.update({
+  id: '/features',
+  path: '/features',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDeveloperRoute = AppDeveloperRouteImport.update({
+  id: '/developer',
+  path: '/developer',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppApiMonitorRoute = AppApiMonitorRouteImport.update({
+  id: '/api-monitor',
+  path: '/api-monitor',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAiRoute = AppAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
+  id: '/settings/',
+  path: '/settings/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsTeamRoute = AppSettingsTeamRouteImport.update({
+  id: '/settings/team',
+  path: '/settings/team',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMerchantsSuccessRoute = AppMerchantsSuccessRouteImport.update({
+  id: '/success',
+  path: '/success',
+  getParentRoute: () => AppMerchantsRoute,
+} as any)
+const AppMerchantsApplicationsRoute =
+  AppMerchantsApplicationsRouteImport.update({
+    id: '/applications',
+    path: '/applications',
+    getParentRoute: () => AppMerchantsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof AppIndexRoute
+  '/login': typeof LoginRoute
+  '/ai': typeof AppAiRoute
+  '/api-monitor': typeof AppApiMonitorRoute
+  '/developer': typeof AppDeveloperRoute
+  '/features': typeof AppFeaturesRoute
+  '/merchants': typeof AppMerchantsRouteWithChildren
+  '/orders': typeof AppOrdersRoute
+  '/payments': typeof AppPaymentsRoute
+  '/retention': typeof AppRetentionRoute
+  '/system': typeof AppSystemRoute
+  '/merchants/applications': typeof AppMerchantsApplicationsRoute
+  '/merchants/success': typeof AppMerchantsSuccessRoute
+  '/settings/team': typeof AppSettingsTeamRoute
+  '/settings/': typeof AppSettingsIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/ai': typeof AppAiRoute
+  '/api-monitor': typeof AppApiMonitorRoute
+  '/developer': typeof AppDeveloperRoute
+  '/features': typeof AppFeaturesRoute
+  '/merchants': typeof AppMerchantsRouteWithChildren
+  '/orders': typeof AppOrdersRoute
+  '/payments': typeof AppPaymentsRoute
+  '/retention': typeof AppRetentionRoute
+  '/system': typeof AppSystemRoute
+  '/': typeof AppIndexRoute
+  '/merchants/applications': typeof AppMerchantsApplicationsRoute
+  '/merchants/success': typeof AppMerchantsSuccessRoute
+  '/settings/team': typeof AppSettingsTeamRoute
+  '/settings': typeof AppSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
+  '/_app/ai': typeof AppAiRoute
+  '/_app/api-monitor': typeof AppApiMonitorRoute
+  '/_app/developer': typeof AppDeveloperRoute
+  '/_app/features': typeof AppFeaturesRoute
+  '/_app/merchants': typeof AppMerchantsRouteWithChildren
+  '/_app/orders': typeof AppOrdersRoute
+  '/_app/payments': typeof AppPaymentsRoute
+  '/_app/retention': typeof AppRetentionRoute
+  '/_app/system': typeof AppSystemRoute
+  '/_app/': typeof AppIndexRoute
+  '/_app/merchants/applications': typeof AppMerchantsApplicationsRoute
+  '/_app/merchants/success': typeof AppMerchantsSuccessRoute
+  '/_app/settings/team': typeof AppSettingsTeamRoute
+  '/_app/settings/': typeof AppSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/ai'
+    | '/api-monitor'
+    | '/developer'
+    | '/features'
+    | '/merchants'
+    | '/orders'
+    | '/payments'
+    | '/retention'
+    | '/system'
+    | '/merchants/applications'
+    | '/merchants/success'
+    | '/settings/team'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/login'
+    | '/ai'
+    | '/api-monitor'
+    | '/developer'
+    | '/features'
+    | '/merchants'
+    | '/orders'
+    | '/payments'
+    | '/retention'
+    | '/system'
+    | '/'
+    | '/merchants/applications'
+    | '/merchants/success'
+    | '/settings/team'
+    | '/settings'
+  id:
+    | '__root__'
+    | '/_app'
+    | '/login'
+    | '/_app/ai'
+    | '/_app/api-monitor'
+    | '/_app/developer'
+    | '/_app/features'
+    | '/_app/merchants'
+    | '/_app/orders'
+    | '/_app/payments'
+    | '/_app/retention'
+    | '/_app/system'
+    | '/_app/'
+    | '/_app/merchants/applications'
+    | '/_app/merchants/success'
+    | '/_app/settings/team'
+    | '/_app/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/': {
+      id: '/_app/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/system': {
+      id: '/_app/system'
+      path: '/system'
+      fullPath: '/system'
+      preLoaderRoute: typeof AppSystemRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/retention': {
+      id: '/_app/retention'
+      path: '/retention'
+      fullPath: '/retention'
+      preLoaderRoute: typeof AppRetentionRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/payments': {
+      id: '/_app/payments'
+      path: '/payments'
+      fullPath: '/payments'
+      preLoaderRoute: typeof AppPaymentsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/orders': {
+      id: '/_app/orders'
+      path: '/orders'
+      fullPath: '/orders'
+      preLoaderRoute: typeof AppOrdersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/merchants': {
+      id: '/_app/merchants'
+      path: '/merchants'
+      fullPath: '/merchants'
+      preLoaderRoute: typeof AppMerchantsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/features': {
+      id: '/_app/features'
+      path: '/features'
+      fullPath: '/features'
+      preLoaderRoute: typeof AppFeaturesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/developer': {
+      id: '/_app/developer'
+      path: '/developer'
+      fullPath: '/developer'
+      preLoaderRoute: typeof AppDeveloperRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/api-monitor': {
+      id: '/_app/api-monitor'
+      path: '/api-monitor'
+      fullPath: '/api-monitor'
+      preLoaderRoute: typeof AppApiMonitorRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ai': {
+      id: '/_app/ai'
+      path: '/ai'
+      fullPath: '/ai'
+      preLoaderRoute: typeof AppAiRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings/': {
+      id: '/_app/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AppSettingsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings/team': {
+      id: '/_app/settings/team'
+      path: '/settings/team'
+      fullPath: '/settings/team'
+      preLoaderRoute: typeof AppSettingsTeamRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/merchants/success': {
+      id: '/_app/merchants/success'
+      path: '/success'
+      fullPath: '/merchants/success'
+      preLoaderRoute: typeof AppMerchantsSuccessRouteImport
+      parentRoute: typeof AppMerchantsRoute
+    }
+    '/_app/merchants/applications': {
+      id: '/_app/merchants/applications'
+      path: '/applications'
+      fullPath: '/merchants/applications'
+      preLoaderRoute: typeof AppMerchantsApplicationsRouteImport
+      parentRoute: typeof AppMerchantsRoute
     }
   }
 }
 
+interface AppMerchantsRouteChildren {
+  AppMerchantsApplicationsRoute: typeof AppMerchantsApplicationsRoute
+  AppMerchantsSuccessRoute: typeof AppMerchantsSuccessRoute
+}
+
+const AppMerchantsRouteChildren: AppMerchantsRouteChildren = {
+  AppMerchantsApplicationsRoute: AppMerchantsApplicationsRoute,
+  AppMerchantsSuccessRoute: AppMerchantsSuccessRoute,
+}
+
+const AppMerchantsRouteWithChildren = AppMerchantsRoute._addFileChildren(
+  AppMerchantsRouteChildren,
+)
+
+interface AppRouteChildren {
+  AppAiRoute: typeof AppAiRoute
+  AppApiMonitorRoute: typeof AppApiMonitorRoute
+  AppDeveloperRoute: typeof AppDeveloperRoute
+  AppFeaturesRoute: typeof AppFeaturesRoute
+  AppMerchantsRoute: typeof AppMerchantsRouteWithChildren
+  AppOrdersRoute: typeof AppOrdersRoute
+  AppPaymentsRoute: typeof AppPaymentsRoute
+  AppRetentionRoute: typeof AppRetentionRoute
+  AppSystemRoute: typeof AppSystemRoute
+  AppIndexRoute: typeof AppIndexRoute
+  AppSettingsTeamRoute: typeof AppSettingsTeamRoute
+  AppSettingsIndexRoute: typeof AppSettingsIndexRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppAiRoute: AppAiRoute,
+  AppApiMonitorRoute: AppApiMonitorRoute,
+  AppDeveloperRoute: AppDeveloperRoute,
+  AppFeaturesRoute: AppFeaturesRoute,
+  AppMerchantsRoute: AppMerchantsRouteWithChildren,
+  AppOrdersRoute: AppOrdersRoute,
+  AppPaymentsRoute: AppPaymentsRoute,
+  AppRetentionRoute: AppRetentionRoute,
+  AppSystemRoute: AppSystemRoute,
+  AppIndexRoute: AppIndexRoute,
+  AppSettingsTeamRoute: AppSettingsTeamRoute,
+  AppSettingsIndexRoute: AppSettingsIndexRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -163,6 +163,8 @@ returns boolean language sql stable security definer set search_path = public as
   select exists (select 1 from public.ops_users where id = auth.uid())
 $$;
 
+grant execute on function public.is_ops_user() to authenticated;
+
 create policy "ops_users_select" on public.ops_users for select to authenticated using (public.is_ops_user() or id = auth.uid());
 create policy "ops_users_update_self" on public.ops_users for update to authenticated using (id = auth.uid());
 

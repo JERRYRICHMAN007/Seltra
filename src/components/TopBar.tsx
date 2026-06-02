@@ -1,14 +1,28 @@
-import { Bell, Search, LogOut } from "lucide-react";
+import { Bell, Search, LogOut, PanelLeft } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { useSidebar } from "@/components/ui/sidebar";
 
 export function TopBar() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const initials = (user?.email ?? "?").slice(0, 2).toUpperCase();
+  let sidebarToggle: any = null;
+  try {
+    // useSidebar may throw if SidebarProvider is not mounted yet; guard it.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    sidebarToggle = useSidebar();
+  } catch (e) {
+    sidebarToggle = null;
+  }
   return (
     <header className="h-14 bg-surface border-b border-border flex items-center px-6 gap-4 sticky top-0 z-20">
+      <div className="mr-2 hidden md:block">
+        <Button variant="ghost" size="icon" onClick={() => sidebarToggle?.toggleSidebar?.()}>
+          <PanelLeft className="h-4 w-4" />
+        </Button>
+      </div>
       <div className="flex-1 max-w-md relative">
         <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input

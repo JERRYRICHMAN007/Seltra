@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/Sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { TopBar } from "@/components/TopBar";
 
 export const Route = createFileRoute("/_app")({
@@ -24,14 +25,16 @@ function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
-        <TopBar />
-        <main className="flex-1 p-6 overflow-x-hidden">
-          <Outlet />
-        </main>
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full bg-background">
+        <Sidebar />
+        <div className="flex-1 flex flex-col min-w-0">
+          <TopBar />
+          <main className="flex-1 p-6 overflow-x-hidden">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }

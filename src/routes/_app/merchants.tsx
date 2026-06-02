@@ -1,9 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, StatusBadge, Card } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { formatGHS, timeAgo, shortDate, exportCsv } from "@/lib/format";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/_app/merchants")({
   head: () => ({ meta: [{ title: "Merchants — Seltra Ops" }] }),
@@ -11,6 +15,7 @@ export const Route = createFileRoute("/_app/merchants")({
 });
 
 function MerchantsPage() {
+  const queryClient = useQueryClient();
   const { data: merchants = [] } = useQuery({
     queryKey: ["merchants"],
     queryFn: async () => (await supabase.from("merchants").select("*").order("created_at", { ascending: false })).data ?? [],
@@ -26,6 +31,16 @@ function MerchantsPage() {
     const prev = gmvByMerchant.get(o.merchant_id) ?? { gmv: 0, count: 0 };
     gmvByMerchant.set(o.merchant_id, { gmv: prev.gmv + Number(o.total_amount), count: prev.count + 1 });
   });
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [selected, setSelected] = useState<any>(null);
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this merchant? This cannot be undone.")) return;
+    const { error } = await supabase.from("merchants").delete().eq("id", id);
+    if (error) return console.error(error);
+    queryClient.invalidateQueries(["merchants"]);
+  }
 
   return (
     <div className="space-y-6">
@@ -48,6 +63,7 @@ function MerchantsPage() {
                 <th className="py-2 pr-4 text-right">Orders</th>
                 <th className="py-2 pr-4">Last Active</th>
                 <th className="py-2 pr-4">Joined</th>
+                <th className="py-2 pr-4">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -70,6 +86,23 @@ function MerchantsPage() {
                     <td className="py-3 pr-4 text-right font-mono">{stats.count}</td>
                     <td className="py-3 pr-4 text-muted-foreground">{timeAgo(m.last_active_at)}</td>
                     <td className="py-3 pr-4 text-muted-foreground">{shortDate(m.onboarded_at)}</td>
+                    <td className="py-3 pr-4">
+                      <div className="flex items-center gap-2">
+                        <Dialog open={editOpen && selected?.id === m.id} onOpenChange={(v) => { setEditOpen(v); if (!v) setSelected(null); }}>
+                          <DialogTrigger asChild>
+                            <Button size="sm" variant="outline" onClick={() => { setSelected(m); setEditOpen(true); }}>Edit</Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Edit merchant</DialogTitle>
+                              <DialogDescription>Update merchant details</DialogDescription>
+                            </DialogHeader>
+                            <MerchantEditForm merchant={m} onSaved={() => { queryClient.invalidateQueries(["merchants"]); setEditOpen(false); setSelected(null); }} />
+                          </DialogContent>
+                        </Dialog>
+                        <Button size="sm" variant="destructive" onClick={() => handleDelete(m.id)}>Remove</Button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -77,6 +110,67 @@ function MerchantsPage() {
           </table>
         </div>
       </Card>
+      
     </div>
+  );
+}
+
+function MerchantEditForm({ merchant, onSaved }: { merchant: any; onSaved?: () => void }) {
+  const [name, setName] = useState(merchant.name || "");
+  const [ownerName, setOwnerName] = useState(merchant.owner_name || "");
+  const [ownerEmail, setOwnerEmail] = useState(merchant.owner_email || "");
+  const [businessType, setBusinessType] = useState(merchant.business_type || "");
+  const [basedIn, setBasedIn] = useState(merchant.based_in || "");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSave(e?: React.FormEvent) {
+    e?.preventDefault();
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("merchants").update({
+        name,
+        owner_name: ownerName,
+        owner_email: ownerEmail,
+        business_type: businessType,
+        based_in: basedIn,
+      }).eq("id", merchant.id);
+      if (error) throw error;
+      onSaved?.();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSave} className="grid gap-3">
+      <div>
+        <Label>Store name</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} required />
+      </div>
+      <div>
+        <Label>Owner name</Label>
+        <Input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
+      </div>
+      <div>
+        <Label>Owner email</Label>
+        <Input value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} type="email" />
+      </div>
+      <div>
+        <Label>Business type</Label>
+        <Input value={businessType} onChange={(e) => setBusinessType(e.target.value)} />
+      </div>
+      <div>
+        <Label>Based in</Label>
+        <Input value={basedIn} onChange={(e) => setBasedIn(e.target.value)} />
+      </div>
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="secondary">Cancel</Button>
+        </DialogClose>
+        <Button type="submit" disabled={loading}>{loading ? "Saving..." : "Save"}</Button>
+      </DialogFooter>
+    </form>
   );
 }

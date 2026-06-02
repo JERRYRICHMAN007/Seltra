@@ -3,9 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, MetricCard, StatusBadge, Card } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
+import { ChevronDown } from "lucide-react";
 import { formatGHS, formatNumber, formatCompact, timeAgo } from "@/lib/format";
 import { LineChart, Line, BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
+
+const GlobeMap = lazy(() => import("@/components/GlobeMap"));
 
 export const Route = createFileRoute("/_app/")({
   head: () => ({ meta: [{ title: "Dashboard — Seltra Ops" }] }),
@@ -17,12 +20,12 @@ function DashboardPage() {
     queryKey: ["dashboard"],
     queryFn: async () => {
       const [merchants, orders, agents, events, health, apps] = await Promise.all([
-        supabase.from("merchants").select("id,name,slug,status,last_active_at"),
+        supabase.from("merchants").select("id,name,slug,status,last_active_at,based_in"),
         supabase.from("orders").select("id,merchant_id,total_amount,status,created_at").order("created_at", { ascending: false }),
         supabase.from("agent_invocations").select("id,created_at,success"),
         supabase.from("platform_events").select("id,event_type,merchant_id,created_at").order("created_at", { ascending: false }).limit(20),
         supabase.from("system_health").select("service,status,checked_at").order("checked_at", { ascending: false }).limit(50),
-        supabase.from("merchant_applications").select("id,full_name,business_name,what_you_sell,status,created_at").eq("status", "applied").order("created_at", { ascending: false }).limit(5),
+        supabase.from("merchant_applications").select("*").order("created_at", { ascending: false }),
       ]);
       return {
         merchants: merchants.data ?? [],
@@ -50,6 +53,9 @@ function DashboardPage() {
   const monthGmv = paidOrders.filter((o) => new Date(o.created_at).getTime() > Date.now() - 30 * 86400 * 1000)
     .reduce((s, o) => s + Number(o.total_amount), 0);
   const todayAgents = (data?.agents ?? []).filter((a) => new Date(a.created_at).getTime() > Date.now() - 86400 * 1000).length;
+  const waitlistApplicants = (data?.apps ?? []).filter((a) => !a.merchant_id).length;
+  const readyToOnboard = (data?.apps ?? []).filter((a) => a.status === "approved" && !a.merchant_id).length;
+  const merchantSuccessCount = (data?.apps ?? []).filter((a) => Boolean(a.merchant_id)).length;
 
   // GMV by day
   const gmvDays = Array.from({ length: 30 }, (_, i) => {
@@ -81,16 +87,51 @@ function DashboardPage() {
   const latestHealth = new Map<string, any>();
   (data?.health ?? []).forEach((h) => { if (!latestHealth.has(h.service)) latestHealth.set(h.service, h); });
 
+  const [showGlobe, setShowGlobe] = useState(true);
+
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="Real-time overview of the Seltra platform" />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <MetricCard label="Total Merchants" value={formatNumber(activeMerchants)} delta="↑ active" />
         <MetricCard label="GMV (30d)" value={formatGHS(monthGmv)} delta={`${paidOrders.length} paid orders`} />
+        <MetricCard label="Waitlist applicants" value={formatCompact(waitlistApplicants)} delta="seen by Ops" />
+        <MetricCard label="Approved to onboard" value={formatCompact(readyToOnboard)} delta="ready for launch" />
+        <MetricCard label="Merchant success" value={formatCompact(merchantSuccessCount)} delta="onboarded" />
         <MetricCard label="AI Invocations (24h)" value={formatCompact(todayAgents)} delta="across all merchants" />
-        <MetricCard label="Avg Health Score" value="78" delta="↑ 4 vs last week" />
       </div>
+
+      <Card
+        title="Global merchant footprint"
+        action={
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowGlobe((prev) => !prev)}
+            className="gap-2"
+          >
+            {showGlobe ? "Collapse" : "Expand"}
+            <ChevronDown className={`transition-transform duration-200 ${showGlobe ? "rotate-180" : "rotate-0"}`} />
+          </Button>
+        }
+      >
+        {showGlobe ? (
+          <Suspense
+            fallback={
+              <div className="min-h-[460px] rounded-3xl bg-slate-950/10 flex items-center justify-center text-sm text-muted-foreground">
+                Loading globe...
+              </div>
+            }
+          >
+            <GlobeMap merchants={data?.merchants ?? []} gmvByMerchant={gmvByMerchant} />
+          </Suspense>
+        ) : (
+          <div className="min-h-[240px] rounded-3xl border border-dashed border-border bg-slate-950/10 flex items-center justify-center text-sm text-muted-foreground">
+            The globe experience is collapsed. Expand to reveal the merchant footprint.
+          </div>
+        )}
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card title="GMV — last 30 days">

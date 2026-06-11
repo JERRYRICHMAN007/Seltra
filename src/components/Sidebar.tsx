@@ -41,12 +41,33 @@ const groups = [
   ]},
 ];
 
+const allNavRoutes = groups.flatMap((g) => g.items.map((i) => i.to));
+
+function normalizePath(p: string) {
+  if (p.length > 1 && p.endsWith("/")) return p.slice(0, -1);
+  return p;
+}
+
+function isNavActive(currentPath: string, to: string) {
+  const path = normalizePath(currentPath);
+  const route = normalizePath(to);
+
+  const matches = allNavRoutes.filter((candidate) => {
+    const target = normalizePath(candidate);
+    if (target === "/") return path === "/";
+    return path === target || path.startsWith(`${target}/`);
+  });
+
+  matches.sort((a, b) => normalizePath(b).length - normalizePath(a).length);
+  return normalizePath(matches[0] ?? "") === route;
+}
+
 export function Sidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
 
   return (
     <UISidebar collapsible="offcanvas">
-        <SidebarHeader className="px-6 py-5 border-b border-sidebar-border">
+        <SidebarHeader className="px-6 py-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold">S</div>
             <div>
@@ -56,17 +77,20 @@ export function Sidebar() {
           </div>
         </SidebarHeader>
 
-        <SidebarContent>
+        <SidebarContent className="overflow-y-auto gap-0 py-2">
           {groups.map((g) => (
-            <SidebarGroup key={g.label} className="mb-5">
-              <SidebarGroupLabel className="px-6 mb-2 text-[10px] font-mono uppercase tracking-widest text-sidebar-muted">{g.label}</SidebarGroupLabel>
+            <SidebarGroup key={g.label} className="mb-1 p-0">
+              <SidebarGroupLabel className="px-6 mb-0.5 h-6 text-[10px] font-mono uppercase tracking-widest text-sidebar-muted">{g.label}</SidebarGroupLabel>
               <SidebarMenu>
                 {g.items.map((it) => {
-                  const active = path === it.to || (it.to !== "/" && path.startsWith(it.to));
+                  const active = isNavActive(path, it.to);
                   return (
                     <li key={it.to}>
-                      <Link to={it.to} className={`block`}>
-                        <SidebarMenuButton isActive={active} className="px-6">
+                      <Link to={it.to} className="block">
+                        <SidebarMenuButton
+                          isActive={active}
+                          className="mx-2 px-4 h-9 rounded-lg transition-all duration-200 ease-out hover:bg-sidebar-active-bg hover:text-white hover:translate-x-0.5 data-[active=true]:bg-sidebar-active-bg data-[active=true]:text-sidebar-active data-[active=true]:font-medium"
+                        >
                           <it.icon className="h-4 w-4" />
                           <span>{it.label}</span>
                         </SidebarMenuButton>
@@ -79,7 +103,7 @@ export function Sidebar() {
           ))}
         </SidebarContent>
 
-        <SidebarFooter className="px-6 py-4 border-t border-sidebar-border">
+        <SidebarFooter className="px-6 py-3 border-t border-sidebar-border">
           <div className="flex items-center gap-3">
             <SidebarTrigger />
             <div className="text-xs text-sidebar-muted">Toggle sidebar</div>

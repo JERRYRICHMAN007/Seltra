@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/hooks/use-theme";
 import { Sidebar } from "@/components/Sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TopBar } from "@/components/TopBar";
@@ -10,6 +11,7 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppLayout() {
+  useTheme();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   useEffect(() => {

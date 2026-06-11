@@ -16,7 +16,7 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
 export function MetricCard({ label, value, delta, accent }: { label: string; value: ReactNode; delta?: string; accent?: "primary" | "warning" | "destructive" }) {
   const accentClass = accent === "warning" ? "text-warning" : accent === "destructive" ? "text-destructive" : "text-primary";
   return (
-    <div className="bg-card rounded-xl p-5 shadow-card card-interactive">
+    <div className="bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 rounded-xl p-5 shadow-card card-interactive">
       <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="mt-2 text-2xl font-semibold text-foreground font-mono">{value}</div>
       {delta && <div className={`mt-1 text-xs ${accentClass}`}>{delta}</div>}
@@ -53,7 +53,7 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function Card({ title, action, children, className = "" }: { title?: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <div className={`bg-card rounded-xl shadow-card card-interactive ${className}`}>
+    <div className={`bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 rounded-xl shadow-card card-interactive ${className}`}>
       {(title || action) && (
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           {title && <h3 className="text-sm font-semibold text-foreground">{title}</h3>}

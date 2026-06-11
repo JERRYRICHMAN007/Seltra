@@ -60,7 +60,7 @@
 
 :root {
   /* Hubtel-inspired palette */
-  --background: oklch(0.985 0.003 220);          /* #F7F9FB-ish */
+  --background: #f8fafc;
   --foreground: oklch(0.22 0.05 245);            /* deep navy text */
   --surface: oklch(1 0 0);
   --surface-muted: oklch(0.97 0.006 230);
@@ -148,6 +148,10 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     -webkit-font-smoothing: antialiased;
+  }
+
+  :not(.dark) table tbody tr {
+    border-bottom: 1px solid #e2e8f0;
   }
   .font-mono, code, .mono { font-family: var(--font-mono); }
 

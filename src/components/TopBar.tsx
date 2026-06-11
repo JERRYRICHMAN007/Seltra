@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useNavigate } from "@tanstack/react-router";
-import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -43,14 +42,14 @@ export function TopBar() {
     <header className="sticky top-0 z-20 flex h-[60px] shrink-0 items-center border-b border-border bg-surface/95 px-4 md:px-6 backdrop-blur supports-[backdrop-filter]:bg-surface/80 shadow-[0_1px_0_0_rgb(16_24_40/0.04),0_4px_12px_-6px_rgb(16_24_40/0.08)]">
       {/* Left: toggle + search */}
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="hidden shrink-0 md:inline-flex h-9 w-9 rounded-lg text-muted-foreground hover:bg-surface-muted hover:text-navy"
+        <button
+          type="button"
+          className="hidden shrink-0 md:grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition-all hover:bg-surface-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
           onClick={() => sidebarToggle?.toggleSidebar?.()}
+          aria-label="Toggle sidebar"
         >
           <PanelLeft className="h-4 w-4" />
-        </Button>
+        </button>
 
         <div className="relative w-full max-w-xl">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -65,7 +64,7 @@ export function TopBar() {
       <div className="ml-4 flex shrink-0 items-center gap-2 md:gap-3">
         <button
           type="button"
-          className="relative grid h-10 w-10 place-items-center rounded-xl border border-transparent text-muted-foreground transition-all hover:border-border hover:bg-surface-muted hover:text-navy"
+          className="relative grid h-10 w-10 place-items-center rounded-xl border border-transparent text-slate-500 transition-all hover:border-border hover:bg-surface-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
           aria-label="Notifications"
         >
           <Bell className="h-[18px] w-[18px]" />
@@ -75,7 +74,7 @@ export function TopBar() {
         <button
           type="button"
           onClick={toggle}
-          className="grid h-10 w-10 place-items-center rounded-xl border border-transparent text-muted-foreground transition-all hover:border-border hover:bg-surface-muted hover:text-navy"
+          className="grid h-10 w-10 place-items-center rounded-xl border border-transparent text-slate-500 transition-all hover:border-border hover:bg-surface-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
           aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         >
           {theme === "dark" ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
@@ -96,10 +95,9 @@ export function TopBar() {
           </span>
         </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10 shrink-0 rounded-xl text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
+        <button
+          type="button"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-slate-500 transition-all hover:bg-surface-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
           onClick={async () => {
             await signOut();
             navigate({ to: "/login" });
@@ -107,7 +105,7 @@ export function TopBar() {
           aria-label="Sign out"
         >
           <LogOut className="h-[18px] w-[18px]" />
-        </Button>
+        </button>
       </div>
     </header>
   );

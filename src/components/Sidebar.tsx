@@ -80,7 +80,7 @@ export function Sidebar() {
         <SidebarContent className="overflow-y-auto gap-0 py-2">
           {groups.map((g) => (
             <SidebarGroup key={g.label} className="mb-1 p-0">
-              <SidebarGroupLabel className="px-6 mb-0.5 h-6 text-[10px] font-mono uppercase tracking-widest text-sidebar-muted">{g.label}</SidebarGroupLabel>
+              <SidebarGroupLabel className="px-6 mb-0.5 h-6 text-[10px] font-mono uppercase tracking-widest text-slate-400 dark:text-sidebar-muted">{g.label}</SidebarGroupLabel>
               <SidebarMenu>
                 {g.items.map((it) => {
                   const active = isNavActive(path, it.to);
@@ -89,9 +89,9 @@ export function Sidebar() {
                       <Link to={it.to} className="block">
                         <SidebarMenuButton
                           isActive={active}
-                          className="mx-2 px-4 h-9 rounded-lg transition-all duration-200 ease-out hover:bg-sidebar-active-bg hover:text-white hover:translate-x-0.5 data-[active=true]:bg-sidebar-active-bg data-[active=true]:text-sidebar-active data-[active=true]:font-medium"
+                          className="group mx-2 px-4 h-9 rounded-lg transition-all duration-200 ease-out hover:bg-sidebar-active-bg hover:text-white hover:translate-x-0.5 data-[active=true]:bg-sidebar-active-bg data-[active=true]:text-sidebar-active data-[active=true]:font-medium"
                         >
-                          <it.icon className="h-4 w-4" />
+                          <it.icon className="h-4 w-4 dark:text-slate-300 dark:group-hover:text-white" />
                           <span>{it.label}</span>
                         </SidebarMenuButton>
                       </Link>

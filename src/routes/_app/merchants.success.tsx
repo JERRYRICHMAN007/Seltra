@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Card, MetricCard, StatusBadge } from "@/components/ui-bits";
 import { formatGHS, formatCompact, timeAgo } from "@/lib/format";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/merchants/success")({
   head: () => ({ meta: [{ title: "Merchant Success — Seltra Ops" }] }),
@@ -11,20 +12,28 @@ export const Route = createFileRoute("/_app/merchants/success")({
 });
 
 function MerchantSuccessPage() {
-  const { data: merchants = [] } = useQuery({
+  const { data: merchants = [], isLoading: merchantsLoading } = useQuery({
     queryKey: ["merchants"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
     queryFn: async () => (await supabase.from("merchants").select("*")).data ?? [],
   });
 
-  const { data: orders = [] } = useQuery({
+  const { data: orders = [], isLoading: ordersLoading } = useQuery({
     queryKey: ["success-orders"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
     queryFn: async () => (await supabase.from("orders").select("merchant_id,total_amount,status,created_at")).data ?? [],
   });
 
-  const { data: applications = [] } = useQuery({
+  const { data: applications = [], isLoading: applicationsLoading } = useQuery({
     queryKey: ["merchant-applications"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
     queryFn: async () => (await supabase.from("merchant_applications").select("status,merchant_id,approved_at,created_at")).data ?? [],
   });
+
+  const isLoading = merchantsLoading || ordersLoading || applicationsLoading;
 
   const paidOrders = useMemo(() => orders.filter((o: any) => o.status === "paid"), [orders]);
   const totalGmv = useMemo(() => paidOrders.reduce((sum: number, order: any) => sum + Number(order.total_amount), 0), [paidOrders]);
@@ -56,6 +65,19 @@ function MerchantSuccessPage() {
       .slice(0, 5)
       .map(([merchantId, stats]) => ({ merchantId, ...stats }));
   }, [paidOrders]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Merchant Success" subtitle="Health, churn risk, and retention" />
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

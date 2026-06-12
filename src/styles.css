@@ -42,6 +42,7 @@
   --color-navy: var(--navy);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-chart-grid: var(--chart-grid);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -59,42 +60,43 @@
 }
 
 :root {
-  /* Hubtel-inspired palette */
-  --background: #f8fafc;
-  --foreground: oklch(0.22 0.05 245);            /* deep navy text */
+  /* Light mode — deep neutral ash canvas */
+  --background: oklch(0.76 0.006 280);
+  --foreground: oklch(0.22 0.02 280);
   --surface: oklch(1 0 0);
-  --surface-muted: oklch(0.97 0.006 230);
+  --surface-muted: oklch(0.93 0.004 280);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.05 245);
+  --card-foreground: oklch(0.22 0.02 280);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.05 245);
+  --popover-foreground: oklch(0.22 0.02 280);
 
-  --primary: oklch(0.62 0.12 195);               /* teal #009F9F */
+  --primary: oklch(0.62 0.12 195);
   --primary-foreground: oklch(1 0 0);
   --primary-soft: oklch(0.95 0.04 195);
 
-  --navy: oklch(0.27 0.06 245);                  /* #082F4D */
+  --navy: oklch(0.27 0.06 245);
 
-  --secondary: oklch(0.96 0.008 230);
-  --secondary-foreground: oklch(0.27 0.06 245);
-  --muted: oklch(0.96 0.008 230);
-  --muted-foreground: oklch(0.52 0.02 240);
+  --secondary: oklch(0.87 0.005 280);
+  --secondary-foreground: oklch(0.27 0.02 280);
+  --muted: oklch(0.84 0.005 280);
+  --muted-foreground: oklch(0.46 0.012 280);
   --accent: oklch(0.94 0.04 195);
   --accent-foreground: oklch(0.27 0.06 245);
 
-  --warning: oklch(0.78 0.16 70);                /* amber #F8971D */
+  --warning: oklch(0.78 0.16 70);
   --warning-foreground: oklch(0.22 0.05 245);
   --warning-soft: oklch(0.96 0.06 80);
 
   --success: oklch(0.62 0.12 195);
   --success-soft: oklch(0.93 0.06 180);
 
-  --destructive: oklch(0.63 0.21 30);            /* coral #EF4923 */
+  --destructive: oklch(0.63 0.21 30);
   --destructive-foreground: oklch(1 0 0);
   --destructive-soft: oklch(0.95 0.05 30);
 
-  --border: oklch(0.92 0.008 230);
-  --input: oklch(0.92 0.008 230);
+  --border: oklch(0.69 0.007 280);
+  --input: oklch(0.69 0.007 280);
+  --chart-grid: oklch(0.63 0.008 280);
   --ring: oklch(0.62 0.12 195);
 
   --sidebar: oklch(0.27 0.06 245);
@@ -131,6 +133,7 @@
   --secondary-foreground: oklch(0.96 0.01 220);
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 12%);
+  --chart-grid: oklch(1 0 0 / 14%);
   --muted: oklch(0.28 0.05 245);
   --muted-foreground: oklch(0.72 0.02 230);
   --primary-soft: oklch(0.28 0.06 195);
@@ -151,7 +154,23 @@
   }
 
   :not(.dark) table tbody tr {
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid oklch(0.69 0.007 280);
+  }
+
+  :not(.dark) table thead tr {
+    border-bottom: 1px solid oklch(0.69 0.007 280);
+  }
+
+  /* Recharts grid & axis detail lines */
+  .recharts-cartesian-grid line {
+    stroke: var(--chart-grid) !important;
+  }
+  .recharts-cartesian-axis line,
+  .recharts-cartesian-axis-tick line {
+    stroke: var(--chart-grid);
+  }
+  .recharts-cartesian-axis-tick text {
+    fill: var(--color-muted-foreground);
   }
   .font-mono, code, .mono { font-family: var(--font-mono); }
 
@@ -181,6 +200,12 @@
       0 1px 2px 0 rgb(16 24 40 / 0.06),
       0 4px 8px -2px rgb(16 24 40 / 0.10),
       0 12px 24px -6px rgb(16 24 40 / 0.08);
+  }
+  :not(.dark) .shadow-card {
+    box-shadow:
+      0 1px 3px 0 rgb(15 23 42 / 0.08),
+      0 4px 14px -2px rgb(15 23 42 / 0.12),
+      0 10px 24px -6px rgb(15 23 42 / 0.08);
   }
   .shadow-card-hover {
     box-shadow:

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatNumber, shortDate } from "@/lib/format";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/api-monitor")({
   head: () => ({ meta: [{ title: "API Monitor — Seltra Ops" }] }),
@@ -59,8 +60,10 @@ function ApiMonitorPage() {
   const [methodFilter, setMethodFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const { data: healthRows = [] } = useQuery({
+  const { data: healthRows = [], isLoading: healthLoading } = useQuery({
     queryKey: ["api-monitor-health"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
     queryFn: async () =>
       (
         await supabase
@@ -71,8 +74,10 @@ function ApiMonitorPage() {
     refetchInterval: 30000,
   });
 
-  const { data: events = [] } = useQuery({
+  const { data: events = [], isLoading: eventsLoading } = useQuery({
     queryKey: ["api-monitor-events"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
     queryFn: async () =>
       (
         await supabase
@@ -146,6 +151,24 @@ function ApiMonitorPage() {
 
     return rows;
   }, [events, search, methodFilter, statusFilter]);
+
+  const isLoading = healthLoading || eventsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="API monitor"
+          subtitle="Real-time health and request log for all platform services"
+        />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

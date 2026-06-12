@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { formatGHS, formatNumber, formatCompact, shortDate, exportCsv } from "@/lib/format";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/payments")({
   head: () => ({ meta: [{ title: "Payments — Seltra Ops" }] }),
@@ -38,8 +39,10 @@ function PaymentsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateRange, setDateRange] = useState("all");
 
-  const { data: orders = [] } = useQuery({
+  const { data: orders = [], isLoading } = useQuery({
     queryKey: ["payments-orders"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
     queryFn: async () =>
       (
         await supabase
@@ -122,6 +125,19 @@ function PaymentsPage() {
         status: o.status,
         date: shortDate(o.created_at),
       })),
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Payments" subtitle="All transactions across merchants" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
     );
   }
 

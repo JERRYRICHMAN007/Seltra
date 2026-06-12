@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, MetricCard, StatusBadge, Card } from "@/components/ui-bits";
 import { formatGHS, shortDate } from "@/lib/format";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/orders")({
   head: () => ({ meta: [{ title: "Orders — Seltra Ops" }] }),
@@ -10,8 +11,10 @@ export const Route = createFileRoute("/_app/orders")({
 });
 
 function OrdersPage() {
-  const { data: orders = [] } = useQuery({
+  const { data: orders = [], isLoading } = useQuery({
     queryKey: ["orders-all"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
     queryFn: async () => (await supabase.from("orders").select("*, merchants(name,slug)").order("created_at", { ascending: false }).limit(200)).data ?? [],
   });
   const totals = {
@@ -21,10 +24,24 @@ function OrdersPage() {
     failed: orders.filter((o: any) => o.status === "failed").length,
     gmv: orders.filter((o: any) => o.status === "paid").reduce((s: number, o: any) => s + Number(o.total_amount), 0),
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Orders" subtitle="All orders across the platform" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Orders" subtitle="All orders across the platform" />
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <MetricCard label="Total" value={totals.all} />
         <MetricCard label="Paid" value={totals.paid} />
         <MetricCard label="Pending" value={totals.pending} accent="warning" />

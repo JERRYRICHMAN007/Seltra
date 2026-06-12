@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, MetricCard, StatusBadge, Card } from "@/components/ui-bits";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
 import { formatGHS, formatNumber, formatCompact, timeAgo } from "@/lib/format";
@@ -16,8 +17,10 @@ export const Route = createFileRoute("/_app/")({
 });
 
 function DashboardPage() {
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
     queryFn: async () => {
       const [merchants, orders, agents, events, health, apps] = await Promise.all([
         supabase.from("merchants").select("id,name,slug,status,last_active_at,based_in"),
@@ -89,6 +92,19 @@ function DashboardPage() {
 
   const [showGlobe, setShowGlobe] = useState(true);
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Dashboard" subtitle="Real-time overview of the Seltra platform" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="Real-time overview of the Seltra platform" />
@@ -117,14 +133,8 @@ function DashboardPage() {
         }
       >
         {showGlobe ? (
-          <Suspense
-            fallback={
-              <div className="min-h-[460px] rounded-3xl bg-slate-950/10 flex items-center justify-center text-sm text-muted-foreground">
-                Loading globe...
-              </div>
-            }
-          >
-            <GlobeMap merchants={data?.merchants ?? []} gmvByMerchant={gmvByMerchant} />
+          <Suspense fallback={<Skeleton className="h-64 w-full rounded-xl" />}>
+            <GlobeMap />
           </Suspense>
         ) : (
           <div className="min-h-[240px] rounded-3xl border border-dashed border-border bg-slate-950/10 flex items-center justify-center text-sm text-muted-foreground">

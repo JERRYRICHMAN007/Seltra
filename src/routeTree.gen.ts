@@ -22,6 +22,7 @@ import { Route as AppDeveloperRouteImport } from './routes/_app/developer'
 import { Route as AppApiMonitorRouteImport } from './routes/_app/api-monitor'
 import { Route as AppAiRouteImport } from './routes/_app/ai'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings.index'
+import { Route as AppMerchantsIndexRouteImport } from './routes/_app/merchants.index'
 import { Route as AppSettingsTeamRouteImport } from './routes/_app/settings.team'
 import { Route as AppMerchantsSuccessRouteImport } from './routes/_app/merchants.success'
 import { Route as AppMerchantsApplicationsRouteImport } from './routes/_app/merchants.applications'
@@ -90,6 +91,11 @@ const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
   path: '/settings/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMerchantsIndexRoute = AppMerchantsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppMerchantsRoute,
+} as any)
 const AppSettingsTeamRoute = AppSettingsTeamRouteImport.update({
   id: '/settings/team',
   path: '/settings/team',
@@ -122,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/merchants/applications': typeof AppMerchantsApplicationsRoute
   '/merchants/success': typeof AppMerchantsSuccessRoute
   '/settings/team': typeof AppSettingsTeamRoute
+  '/merchants/': typeof AppMerchantsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -130,7 +137,6 @@ export interface FileRoutesByTo {
   '/api-monitor': typeof AppApiMonitorRoute
   '/developer': typeof AppDeveloperRoute
   '/features': typeof AppFeaturesRoute
-  '/merchants': typeof AppMerchantsRouteWithChildren
   '/orders': typeof AppOrdersRoute
   '/payments': typeof AppPaymentsRoute
   '/retention': typeof AppRetentionRoute
@@ -139,6 +145,7 @@ export interface FileRoutesByTo {
   '/merchants/applications': typeof AppMerchantsApplicationsRoute
   '/merchants/success': typeof AppMerchantsSuccessRoute
   '/settings/team': typeof AppSettingsTeamRoute
+  '/merchants': typeof AppMerchantsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
 }
 export interface FileRoutesById {
@@ -158,6 +165,7 @@ export interface FileRoutesById {
   '/_app/merchants/applications': typeof AppMerchantsApplicationsRoute
   '/_app/merchants/success': typeof AppMerchantsSuccessRoute
   '/_app/settings/team': typeof AppSettingsTeamRoute
+  '/_app/merchants/': typeof AppMerchantsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -177,6 +185,7 @@ export interface FileRouteTypes {
     | '/merchants/applications'
     | '/merchants/success'
     | '/settings/team'
+    | '/merchants/'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -185,7 +194,6 @@ export interface FileRouteTypes {
     | '/api-monitor'
     | '/developer'
     | '/features'
-    | '/merchants'
     | '/orders'
     | '/payments'
     | '/retention'
@@ -194,6 +202,7 @@ export interface FileRouteTypes {
     | '/merchants/applications'
     | '/merchants/success'
     | '/settings/team'
+    | '/merchants'
     | '/settings'
   id:
     | '__root__'
@@ -212,6 +221,7 @@ export interface FileRouteTypes {
     | '/_app/merchants/applications'
     | '/_app/merchants/success'
     | '/_app/settings/team'
+    | '/_app/merchants/'
     | '/_app/settings/'
   fileRoutesById: FileRoutesById
 }
@@ -313,6 +323,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/merchants/': {
+      id: '/_app/merchants/'
+      path: '/'
+      fullPath: '/merchants/'
+      preLoaderRoute: typeof AppMerchantsIndexRouteImport
+      parentRoute: typeof AppMerchantsRoute
+    }
     '/_app/settings/team': {
       id: '/_app/settings/team'
       path: '/settings/team'
@@ -340,11 +357,13 @@ declare module '@tanstack/react-router' {
 interface AppMerchantsRouteChildren {
   AppMerchantsApplicationsRoute: typeof AppMerchantsApplicationsRoute
   AppMerchantsSuccessRoute: typeof AppMerchantsSuccessRoute
+  AppMerchantsIndexRoute: typeof AppMerchantsIndexRoute
 }
 
 const AppMerchantsRouteChildren: AppMerchantsRouteChildren = {
   AppMerchantsApplicationsRoute: AppMerchantsApplicationsRoute,
   AppMerchantsSuccessRoute: AppMerchantsSuccessRoute,
+  AppMerchantsIndexRoute: AppMerchantsIndexRoute,
 }
 
 const AppMerchantsRouteWithChildren = AppMerchantsRoute._addFileChildren(

@@ -8,7 +8,6 @@ const SRC = `<!doctype html>
     <style>
       html,body { height:100%; margin:0; padding:0; background:transparent; overflow:hidden; }
       #root { width:100%; height:100%; overflow:hidden; }
-      /* Hide any scrollbars inside the embed */
       ::-webkit-scrollbar { display: none; }
     </style>
     <script type="importmap">{
@@ -27,7 +26,6 @@ const SRC = `<!doctype html>
       import * as React from 'react';
       import { createRoot } from 'react-dom/client';
       try {
-        // Load the Framer bundle and mount the component. The embed will control its own layout.
         const module = await import('${FRAMER_GLOBE_BUNDLE}');
         const Component = module.default || module.GlobeMorph || null;
         const root = createRoot(document.getElementById('root'));
@@ -50,7 +48,7 @@ export default function GlobeMap() {
         loading="lazy"
         scrolling="no"
         className="absolute inset-0 w-full h-full"
-        style={{ border: 'none', display: 'block' }}
+        style={{ border: "none", display: "block" }}
       />
     </div>
   );

@@ -8,6 +8,7 @@ import { formatGHS, formatNumber, formatCompact, timeAgo } from "@/lib/format";
 import { LineChart, Line, BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import type { GlobePoint } from "@/components/GlobeMap";
+import { ClientOnly } from "@/components/client-only";
 
 const GlobeMap = lazy(() => import("@/components/GlobeMap"));
 
@@ -57,10 +58,20 @@ function DashboardPage() {
   const [liveEvents, setLiveEvents] = useState<any[]>([]);
   useEffect(() => { setLiveEvents(data?.events ?? []); }, [data?.events]);
   useEffect(() => {
-    const ch = supabase.channel("dash-events").on("postgres_changes", { event: "INSERT", schema: "public", table: "platform_events" }, (p) => {
-      setLiveEvents((prev) => [p.new as any, ...prev].slice(0, 20));
-    }).subscribe();
-    return () => { supabase.removeChannel(ch); };
+    try {
+      const ch = supabase
+        .channel("dash-events")
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "platform_events" }, (p) => {
+          setLiveEvents((prev) => [p.new as any, ...prev].slice(0, 20));
+        })
+        .subscribe();
+      return () => {
+        supabase.removeChannel(ch);
+      };
+    } catch (error) {
+      console.error("[dashboard] Realtime unavailable:", error);
+      return undefined;
+    }
   }, []);
 
   const merchantsById = new Map((data?.merchants ?? []).map((m) => [m.id, m]));
@@ -203,9 +214,11 @@ function DashboardPage() {
             </div>
           </div>
 
-          <Suspense fallback={<div className="px-6"><Skeleton className="h-64 w-full rounded-xl" /></div>}>
-            <GlobeMap points={globeData as GlobePoint[]} />
-          </Suspense>
+          <ClientOnly fallback={<div className="px-6"><Skeleton className="h-64 w-full rounded-xl" /></div>}>
+            <Suspense fallback={<div className="px-6"><Skeleton className="h-64 w-full rounded-xl" /></div>}>
+              <GlobeMap points={globeData as GlobePoint[]} />
+            </Suspense>
+          </ClientOnly>
 
           <div className="relative flex flex-wrap gap-2 px-5 pb-4 pt-1">
             {Object.entries(merchantsByCountry)

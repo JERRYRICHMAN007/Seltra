@@ -3,7 +3,17 @@ import { createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 
 export const getRouter = () => {
-  const queryClient = new QueryClient();
+  const isServer = typeof window === "undefined";
+
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 60 * 1000,
+        // Supabase client + realtime are browser-first; skip SSR fetches on Vercel.
+        enabled: !isServer,
+      },
+    },
+  });
 
   const router = createRouter({
     routeTree,

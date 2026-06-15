@@ -14,4 +14,10 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    ssr: {
+      // WebGL / canvas libs must not run during SSR on Vercel.
+      external: ["react-globe.gl", "three", "three-globe"],
+    },
+  },
 });

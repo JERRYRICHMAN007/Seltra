@@ -36,17 +36,6 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
-        <script type="importmap">
-          {`{
-            "imports": {
-              "react": "https://esm.sh/react@18?min",
-              "react/jsx-runtime": "https://esm.sh/react@18/jsx-runtime?min",
-              "react/jsx-dev-runtime": "https://esm.sh/react@18/jsx-dev-runtime?min",
-              "react-dom/client": "https://esm.sh/react-dom@18/client?min",
-              "framer": "/framer-shim.js"
-            }
-          }`}
-        </script>
       </head>
       <body>{children}<Scripts /></body>
     </html>

@@ -44,7 +44,7 @@ export function TopBar() {
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <button
           type="button"
-          className="hidden shrink-0 md:grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition-all hover:bg-surface-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+          className="hidden shrink-0 md:grid place-items-center rounded-md p-1.5 text-slate-500 transition-colors hover:bg-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
           onClick={() => sidebarToggle?.toggleSidebar?.()}
           aria-label="Toggle sidebar"
         >
@@ -64,17 +64,17 @@ export function TopBar() {
       <div className="ml-4 flex shrink-0 items-center gap-2 md:gap-3">
         <button
           type="button"
-          className="relative grid h-10 w-10 place-items-center rounded-xl border border-transparent text-slate-500 transition-all hover:border-border hover:bg-surface-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+          className="relative grid place-items-center rounded-md p-1.5 text-slate-500 transition-colors hover:bg-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
           aria-label="Notifications"
         >
           <Bell className="h-[18px] w-[18px]" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-surface" />
+          <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-surface" />
         </button>
 
         <button
           type="button"
           onClick={toggle}
-          className="grid h-10 w-10 place-items-center rounded-xl border border-transparent text-slate-500 transition-all hover:border-border hover:bg-surface-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+          className="grid place-items-center rounded-md p-1.5 text-slate-500 transition-colors hover:bg-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
           aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         >
           {theme === "dark" ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
@@ -90,14 +90,14 @@ export function TopBar() {
             <div className="truncate text-sm font-medium leading-tight text-navy">{displayName}</div>
             <div className="truncate text-[11px] leading-tight text-muted-foreground">{user?.email}</div>
           </div>
-          <span className="hidden lg:inline-flex rounded-md bg-primary-soft px-2 py-0.5 text-[10px] font-medium capitalize text-primary">
+          <span className="hidden lg:inline-flex rounded-full border border-border bg-transparent px-2 py-0.5 text-xs font-medium capitalize text-muted-foreground">
             {role}
           </span>
         </div>
 
         <button
           type="button"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-slate-500 transition-all hover:bg-surface-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+          className="grid shrink-0 place-items-center rounded-md p-1.5 text-slate-500 transition-colors hover:bg-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
           onClick={async () => {
             await signOut();
             navigate({ to: "/login" });

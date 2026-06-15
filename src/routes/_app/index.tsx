@@ -4,12 +4,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, MetricCard, StatusBadge, Card } from "@/components/ui-bits";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ChevronDown } from "lucide-react";
 import { formatGHS, formatNumber, formatCompact, timeAgo } from "@/lib/format";
 import { LineChart, Line, BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import type { GlobePoint } from "@/components/GlobeMap";
 
 const GlobeMap = lazy(() => import("@/components/GlobeMap"));
+
+const cityCoords: Record<string, { lat: number; lng: number }> = {
+  "Accra, Ghana": { lat: 5.6037, lng: -0.1870 },
+  "Kumasi, Ghana": { lat: 6.6885, lng: -1.6244 },
+  "Cape Coast, Ghana": { lat: 5.1053, lng: -1.2466 },
+  "Tema, Ghana": { lat: 5.6698, lng: -0.0166 },
+  "Tamale, Ghana": { lat: 9.4035, lng: -0.8423 },
+  "Ho, Ghana": { lat: 6.6119, lng: 0.4703 },
+  "Ghana": { lat: 7.9465, lng: -1.0232 },
+  "Lagos, Nigeria": { lat: 6.5244, lng: 3.3792 },
+  "Nairobi, Kenya": { lat: -1.2921, lng: 36.8219 },
+  "Johannesburg, South Africa": { lat: -26.2041, lng: 28.0473 },
+};
 
 export const Route = createFileRoute("/_app/")({
   head: () => ({ meta: [{ title: "Dashboard — Seltra Ops" }] }),
@@ -90,7 +103,44 @@ function DashboardPage() {
   const latestHealth = new Map<string, any>();
   (data?.health ?? []).forEach((h) => { if (!latestHealth.has(h.service)) latestHealth.set(h.service, h); });
 
-  const [showGlobe, setShowGlobe] = useState(true);
+  const globeData = useMemo(() => {
+    const merchants = data?.merchants ?? [];
+    const grouped = merchants.reduce<Record<string, typeof merchants>>((acc, m) => {
+      const location = m.based_in || "Unknown";
+      if (!acc[location]) acc[location] = [];
+      acc[location].push(m);
+      return acc;
+    }, {});
+
+    return Object.entries(grouped)
+      .map(([location, list]) => {
+        const coords = cityCoords[location];
+        if (!coords) return null;
+        const country = location.includes(",") ? location.split(",").pop()!.trim() : location;
+        return {
+          lat: coords.lat,
+          lng: coords.lng,
+          label: location,
+          count: list.length,
+          country,
+        };
+      })
+      .filter(Boolean);
+  }, [data?.merchants]);
+
+  const merchants = data?.merchants ?? [];
+  const merchantsByCountry = useMemo(() => {
+    const acc: Record<string, number> = {};
+    for (const m of merchants) {
+      const basedIn = m.based_in || "";
+      const country = basedIn.includes(",") ? basedIn.split(",").pop()!.trim() : basedIn;
+      if (!country) continue;
+      acc[country] = (acc[country] || 0) + 1;
+    }
+    return acc;
+  }, [merchants]);
+
+  const topCountry = Object.entries(merchantsByCountry).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
 
   if (isLoading) {
     return (
@@ -109,39 +159,80 @@ function DashboardPage() {
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="Real-time overview of the Seltra platform" />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        <MetricCard label="Total Merchants" value={formatNumber(activeMerchants)} delta="↑ active" />
-        <MetricCard label="GMV (30d)" value={formatGHS(monthGmv)} delta={`${paidOrders.length} paid orders`} />
-        <MetricCard label="Waitlist applicants" value={formatCompact(waitlistApplicants)} delta="seen by Ops" />
-        <MetricCard label="Approved to onboard" value={formatCompact(readyToOnboard)} delta="ready for launch" />
-        <MetricCard label="Merchant success" value={formatCompact(merchantSuccessCount)} delta="onboarded" />
-        <MetricCard label="AI Invocations (24h)" value={formatCompact(todayAgents)} delta="across all merchants" />
-      </div>
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-3 gap-4">
+          <MetricCard label="Total Merchants" value={formatNumber(activeMerchants)} delta="↑ active" />
+          <MetricCard label="GMV (30d)" value={formatGHS(monthGmv)} delta={`${paidOrders.length} paid orders`} />
+          <MetricCard label="Waitlist applicants" value={formatCompact(waitlistApplicants)} delta="seen by Ops" />
+          <MetricCard label="Approved to onboard" value={formatCompact(readyToOnboard)} delta="ready for launch" />
+          <MetricCard label="Merchant success" value={formatCompact(merchantSuccessCount)} delta="onboarded" />
+          <MetricCard label="AI Invocations (24h)" value={formatCompact(todayAgents)} delta="across all merchants" />
+        </div>
 
-      <Card
-        title="Global merchant footprint"
-        action={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowGlobe((prev) => !prev)}
-            className="gap-2"
-          >
-            {showGlobe ? "Collapse" : "Expand"}
-            <ChevronDown className={`transition-transform duration-200 ${showGlobe ? "rotate-180" : "rotate-0"}`} />
-          </Button>
-        }
-      >
-        {showGlobe ? (
-          <Suspense fallback={<Skeleton className="h-64 w-full rounded-xl" />}>
-            <GlobeMap />
-          </Suspense>
-        ) : (
-          <div className="min-h-[240px] rounded-3xl border border-dashed border-border bg-slate-950/10 flex items-center justify-center text-sm text-muted-foreground">
-            The globe experience is collapsed. Expand to reveal the merchant footprint.
+        <div
+          className="relative rounded-2xl overflow-hidden border border-border"
+          style={{
+            background: "linear-gradient(135deg, #0a0f1e 0%, #0d1f2d 50%, #0a1628 100%)",
+          }}
+        >
+          <div
+            className="absolute inset-0 dark:opacity-0 opacity-100 pointer-events-none"
+            style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)" }}
+          />
+
+          <div className="relative flex items-start justify-between px-5 pt-4 pb-1">
+            <div>
+              <div className="text-2xl font-semibold text-white">Global merchant footprint</div>
+              <div className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.5)" }}>
+                {merchants.length} merchants across {Object.keys(merchantsByCountry).length} countries
+              </div>
+            </div>
+            <div className="flex gap-6 text-right">
+              <div>
+                <div className="text-xl font-semibold text-white">{merchants.filter((m) => m.status === "active").length}</div>
+                <div className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>Active</div>
+              </div>
+              <div>
+                <div className="text-xl font-semibold" style={{ color: "#1D9E75" }}>{Object.keys(merchantsByCountry).length}</div>
+                <div className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>Countries</div>
+              </div>
+              <div>
+                <div className="text-xl font-semibold text-white">{topCountry}</div>
+                <div className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>Top market</div>
+              </div>
+            </div>
           </div>
-        )}
-      </Card>
+
+          <Suspense fallback={<div className="px-6"><Skeleton className="h-64 w-full rounded-xl" /></div>}>
+            <GlobeMap points={globeData as GlobePoint[]} />
+          </Suspense>
+
+          <div className="relative flex flex-wrap gap-2 px-5 pb-4 pt-1">
+            {Object.entries(merchantsByCountry)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 6)
+              .map(([country, count]) => (
+                <div
+                  key={country}
+                  style={{
+                    background: "rgba(29,158,117,0.15)",
+                    border: "1px solid rgba(29,158,117,0.3)",
+                    borderRadius: "20px",
+                    padding: "4px 12px",
+                    fontSize: "12px",
+                    color: "white",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#1D9E75", display: "inline-block" }} />
+                  {country} · {count}
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card title="GMV — last 30 days">

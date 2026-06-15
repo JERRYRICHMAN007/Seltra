@@ -49,6 +49,7 @@ function SegmentRow({
   total: number;
 }) {
   const pct = total ? Math.round((count / total) * 100) : 0;
+  const zero = count === 0;
   return (
     <div className="flex items-center justify-between gap-4 py-2.5 border-b border-border last:border-0">
       <div className="flex items-center gap-2.5">
@@ -56,8 +57,8 @@ function SegmentRow({
         <span className="text-sm font-medium text-foreground">{label}</span>
       </div>
       <div className="text-right">
-        <div className="font-mono text-sm text-foreground">{count}</div>
-        <div className="text-xs text-muted-foreground">{pct}%</div>
+        <div className={`font-mono text-sm ${zero ? "text-muted-foreground" : "text-foreground"}`}>{count}</div>
+        <div className={`text-xs text-right ${zero ? "text-muted-foreground" : "text-foreground"}`}>{pct}%</div>
       </div>
     </div>
   );
@@ -220,7 +221,7 @@ function RetentionPage() {
         <MetricCard label="Avg days since active" value={avgDaysSinceActive} delta="across all merchants" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <Card title="Merchant segments">
           <SegmentRow dotClass="bg-green-500" label="Healthy" count={healthyCount} total={total} />
           <SegmentRow dotClass="bg-amber-500" label="At risk" count={atRiskCount} total={total} />

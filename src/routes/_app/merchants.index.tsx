@@ -40,6 +40,17 @@ function MerchantsPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [selected, setSelected] = useState<any>(null);
+  const [search, setSearch] = useState("");
+
+  const filteredMerchants = merchants.filter((m: any) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      m.name?.toLowerCase().includes(q) ||
+      m.slug?.toLowerCase().includes(q) ||
+      m.owner_name?.toLowerCase().includes(q)
+    );
+  });
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this merchant? This cannot be undone.")) return;
@@ -66,9 +77,17 @@ function MerchantsPage() {
       <PageHeader
         title="Merchants"
         subtitle="All registered stores on Seltra"
-        action={<Button onClick={() => exportCsv("merchants.csv", merchants as any)}>Export CSV</Button>}
+        action={<Button variant="outline" onClick={() => exportCsv("merchants.csv", merchants as any)}>Export CSV</Button>}
       />
       <Card>
+        <div className="mb-4">
+          <Input
+            placeholder="Search by store name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-sm bg-surface-muted border-input"
+          />
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -86,13 +105,13 @@ function MerchantsPage() {
               </tr>
             </thead>
             <tbody>
-              {merchants.map((m: any) => {
+              {filteredMerchants.map((m: any) => {
                 const stats = gmvByMerchant.get(m.id) ?? { gmv: 0, count: 0 };
                 return (
                   <tr key={m.id} className="border-b border-border hover:bg-surface-muted/50 cursor-pointer">
                     <td className="py-3 pr-4">
-                      <div className="font-medium text-navy">{m.name}</div>
-                      <div className="text-xs font-mono text-muted-foreground">{m.slug}</div>
+                      <div className="font-medium text-sm text-navy">{m.name}</div>
+                      <div className="text-xs text-muted-foreground">{m.slug}</div>
                     </td>
                     <td className="py-3 pr-4">
                       <div className="text-navy">{m.owner_name}</div>
@@ -119,7 +138,14 @@ function MerchantsPage() {
                             <MerchantEditForm merchant={m} onSaved={() => { queryClient.invalidateQueries({ queryKey: ["merchants"] }); setEditOpen(false); setSelected(null); }} />
                           </DialogContent>
                         </Dialog>
-                        <Button size="sm" variant="destructive" onClick={() => handleDelete(m.id)}>Remove</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive border-destructive hover:bg-destructive hover:text-white"
+                          onClick={() => handleDelete(m.id)}
+                        >
+                          Remove
+                        </Button>
                       </div>
                     </td>
                   </tr>

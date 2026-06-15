@@ -17,15 +17,19 @@ export function MetricCard({ label, value, delta, accent }: { label: string; val
   const accentClass = accent === "warning" ? "text-warning" : accent === "destructive" ? "text-destructive" : "text-primary";
   const valueTitle = typeof value === "string" || typeof value === "number" ? String(value) : undefined;
   return (
-    <div className="min-w-0 overflow-hidden bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 rounded-xl p-4 sm:p-5 shadow-card card-interactive">
-      <div className="truncate text-xs font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div
-        className="mt-2 min-w-0 truncate text-lg sm:text-xl lg:text-2xl font-semibold text-foreground font-mono leading-tight"
-        title={valueTitle}
-      >
-        {value}
+    <div className="min-h-[120px] min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4 sm:p-5 shadow-card card-interactive flex flex-col">
+      <div className="flex flex-1 flex-col justify-between">
+        <div className="truncate text-xs font-medium text-muted-foreground tracking-normal">{label}</div>
+        <div>
+          <div
+            className="min-w-0 truncate text-lg sm:text-xl lg:text-2xl font-semibold text-foreground font-mono leading-tight"
+            title={valueTitle}
+          >
+            {value}
+          </div>
+          {delta && <div className={`mt-1 truncate text-xs ${accentClass}`}>{delta}</div>}
+        </div>
       </div>
-      {delta && <div className={`mt-1 truncate text-xs ${accentClass}`}>{delta}</div>}
     </div>
   );
 }
@@ -59,7 +63,7 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function Card({ title, action, children, className = "", interactive = false }: { title?: string; action?: ReactNode; children: ReactNode; className?: string; interactive?: boolean }) {
   return (
-    <div className={`bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 rounded-xl shadow-card ${interactive ? "card-interactive" : ""} ${className}`}>
+    <div className={`rounded-xl border border-border bg-card shadow-card ${interactive ? "card-interactive" : ""} ${className}`}>
       {(title || action) && (
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-border">
           {title && <h3 className="text-sm font-semibold text-foreground">{title}</h3>}

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageHeader, Card, PageWrapper } from "@/components/ui-bits";
+import { PageHeader, Card } from "@/components/ui-bits";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +19,7 @@ function DeveloperPage() {
   const [logMode, setLogMode] = useState("info");
 
   return (
-    <PageWrapper>
+    <div className="space-y-6">
       <PageHeader title="Developer Tools" subtitle="Internal utilities for the Seltra engineering team" />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -64,6 +64,6 @@ function DeveloperPage() {
           </div>
         </Card>
       </div>
-    </PageWrapper>
+    </div>
   );
 }

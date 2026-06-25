@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Outlet, createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
+import { getServerSupabasePublicConfig } from "@/lib/supabase-public-env";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -32,10 +33,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  const supabaseConfig = getServerSupabasePublicConfig();
+
   return (
     <html lang="en">
       <head>
         <HeadContent />
+        {supabaseConfig ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `window.__SUPABASE_CONFIG__=${JSON.stringify(supabaseConfig)}`,
+            }}
+          />
+        ) : null}
       </head>
       <body>{children}<Scripts /></body>
     </html>

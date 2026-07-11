@@ -3,175 +3,318 @@ import { z } from "zod";
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
+  buildOpsMessageEmail,
   normalizePhone,
   sendEmailsViaResend,
   sendSmsViaMoolre,
   type SendResultItem,
 } from "./messaging.server";
 
-export type CommunicationRecipient = {
+export type MessagingAudienceItem = {
   id: string;
-  storeName: string;
+  label: string;
   ownerName: string;
   email: string | null;
   phone: string | null;
-  status: string;
-  source: "merchant" | "application";
+  source: "application" | "tenant";
+  smsEligible: boolean;
 };
 
-const recipientSchema = z.object({
-  id: z.string(),
-  storeName: z.string(),
-  ownerName: z.string(),
-  email: z.string().nullable(),
-  phone: z.string().nullable(),
-  status: z.string(),
-  source: z.enum(["merchant", "application"]),
-});
-
-export const listCommunicationRecipients = createServerFn({ method: "GET" }).handler(
-  async (): Promise<CommunicationRecipient[]> => {
-    const [merchantsRes, appsRes] = await Promise.all([
-      supabaseAdmin
-        .from("merchants")
-        .select("id, name, owner_name, owner_email, status")
-        .order("name", { ascending: true }),
-      supabaseAdmin
-        .from("merchant_applications")
-        .select("id, full_name, business_name, store_name, email, phone, status, merchant_id")
-        .order("created_at", { ascending: false }),
-    ]);
-
-    if (merchantsRes.error) throw new Error(merchantsRes.error.message);
-    if (appsRes.error) throw new Error(appsRes.error.message);
-
-    const apps = appsRes.data ?? [];
-    const phoneByMerchantId = new Map<string, string>();
-    const phoneByEmail = new Map<string, string>();
-
-    for (const app of apps) {
-      const phone = app.phone?.trim();
-      if (!phone) continue;
-      if (app.merchant_id && !phoneByMerchantId.has(app.merchant_id)) {
-        phoneByMerchantId.set(app.merchant_id, phone);
-      }
-      if (app.email) {
-        const key = app.email.toLowerCase();
-        if (!phoneByEmail.has(key)) phoneByEmail.set(key, phone);
-      }
-    }
-
-    const merchants: CommunicationRecipient[] = (merchantsRes.data ?? []).map((m) => {
-      const email = m.owner_email?.trim() || null;
-      const phone =
-        phoneByMerchantId.get(m.id) ??
-        (email ? phoneByEmail.get(email.toLowerCase()) : undefined) ??
-        null;
-      return {
-        id: m.id,
-        storeName: m.name,
-        ownerName: m.owner_name ?? m.name,
-        email,
-        phone,
-        status: m.status,
-        source: "merchant",
-      };
-    });
-
-    // Include waitlist applicants not yet linked to a merchant
-    const waitlist: CommunicationRecipient[] = apps
-      .filter((a) => !a.merchant_id)
-      .map((a) => ({
-        id: a.id,
-        storeName: a.store_name || a.business_name || a.full_name,
-        ownerName: a.full_name,
-        email: a.email?.trim() || null,
-        phone: a.phone?.trim() || null,
-        status: a.status,
-        source: "application" as const,
-      }));
-
-    return [...merchants, ...waitlist];
-  },
-);
-
-const sendPayloadSchema = z.object({
-  channels: z.array(z.enum(["email", "sms"])).min(1),
-  subject: z.string().optional(),
-  message: z.string().min(1),
-  recipients: z.array(recipientSchema).min(1),
-  extraEmails: z.array(z.string().email()).optional(),
-  extraPhones: z.array(z.string()).optional(),
-});
-
-export type SendCommunicationResult = {
-  email?: { sent: number; failed: number; results: SendResultItem[] };
-  sms?: { sent: number; failed: number; results: SendResultItem[] };
+export type SendMessagingResult = {
+  sent: number;
+  failed: number;
+  recipientCount: number;
+  results: SendResultItem[];
 };
 
-export const sendMerchantCommunication = createServerFn({ method: "POST" })
-  .inputValidator(sendPayloadSchema)
-  .handler(async ({ data }): Promise<SendCommunicationResult> => {
-    const result: SendCommunicationResult = {};
-    const wantsEmail = data.channels.includes("email");
-    const wantsSms = data.channels.includes("sms");
+async function loadMessagingAudience(): Promise<MessagingAudienceItem[]> {
+  const [merchantsRes, appsRes] = await Promise.all([
+    supabaseAdmin
+      .from("merchants")
+      .select("id, name, owner_name, owner_email, status")
+      .order("name", { ascending: true }),
+    supabaseAdmin
+      .from("merchant_applications")
+      .select("id, full_name, business_name, store_name, email, phone, status, merchant_id")
+      .order("created_at", { ascending: false }),
+  ]);
 
-    if (wantsEmail) {
-      const subject = data.subject?.trim();
-      if (!subject) throw new Error("Email subject is required");
+  if (merchantsRes.error) throw new Error(merchantsRes.error.message);
+  if (appsRes.error) throw new Error(appsRes.error.message);
 
-      const emailMap = new Map<string, { email: string; name?: string }>();
-      for (const r of data.recipients) {
-        if (!r.email) continue;
-        emailMap.set(r.email.toLowerCase(), { email: r.email, name: r.ownerName });
-      }
-      for (const email of data.extraEmails ?? []) {
-        emailMap.set(email.toLowerCase(), { email });
-      }
+  const apps = appsRes.data ?? [];
+  const phoneByMerchantId = new Map<string, string>();
+  const phoneByEmail = new Map<string, string>();
 
-      const recipients = Array.from(emailMap.values());
-      if (!recipients.length) throw new Error("No valid email recipients selected");
-
-      const html = textToHtml(data.message);
-      result.email = await sendEmailsViaResend({
-        recipients,
-        subject,
-        html,
-        text: data.message,
-      });
+  for (const app of apps) {
+    const phone = app.phone?.trim();
+    if (!phone) continue;
+    if (app.merchant_id && !phoneByMerchantId.has(app.merchant_id)) {
+      phoneByMerchantId.set(app.merchant_id, phone);
     }
-
-    if (wantsSms) {
-      const phoneMap = new Map<string, { phone: string; name?: string }>();
-      for (const r of data.recipients) {
-        if (!r.phone) continue;
-        const normalized = normalizePhone(r.phone);
-        if (!normalized) continue;
-        phoneMap.set(normalized, { phone: normalized, name: r.ownerName });
-      }
-      for (const phone of data.extraPhones ?? []) {
-        const normalized = normalizePhone(phone);
-        if (!normalized) continue;
-        phoneMap.set(normalized, { phone: normalized });
-      }
-
-      const recipients = Array.from(phoneMap.values());
-      if (!recipients.length) throw new Error("No valid SMS recipients selected");
-
-      result.sms = await sendSmsViaMoolre({
-        recipients,
-        message: data.message,
-      });
+    if (app.email) {
+      const key = app.email.toLowerCase();
+      if (!phoneByEmail.has(key)) phoneByEmail.set(key, phone);
     }
+  }
 
-    return result;
+  const tenants: MessagingAudienceItem[] = (merchantsRes.data ?? []).map((m) => {
+    const email = m.owner_email?.trim() || null;
+    const phone =
+      phoneByMerchantId.get(m.id) ??
+      (email ? phoneByEmail.get(email.toLowerCase()) ?? null : null);
+    return {
+      id: m.id,
+      label: m.name,
+      ownerName: m.owner_name ?? m.name,
+      email,
+      phone,
+      source: "tenant" as const,
+      smsEligible: Boolean(phone && normalizePhone(phone)),
+    };
   });
 
-function textToHtml(message: string) {
-  const escaped = message
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-  const body = escaped.replaceAll("\n", "<br />");
-  return `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#0f172a">${body}</div>`;
+  const applications: MessagingAudienceItem[] = apps.map((a) => {
+    const phone = a.phone?.trim() || null;
+    return {
+      id: a.id,
+      label: a.store_name || a.business_name || a.full_name,
+      ownerName: a.full_name,
+      email: a.email?.trim() || null,
+      phone,
+      source: "application" as const,
+      smsEligible: Boolean(phone && normalizePhone(phone)),
+    };
+  });
+
+  return [...applications, ...tenants];
 }
+
+/** Audience for pickers — applications always; tenants for email (often no phone). */
+export const listMessagingAudience = createServerFn({ method: "GET" }).handler(
+  async (): Promise<MessagingAudienceItem[]> => loadMessagingAudience(),
+);
+
+async function resolveEmailRecipients(input: {
+  scope: "all" | "selected";
+  recipientIds: string[];
+  sourceType: "application" | "tenant" | "mixed";
+}) {
+  // Re-fetch fresh contact rows by ID — never trust client-submitted addresses
+  if (input.scope === "selected") {
+    if (!input.recipientIds.length) return [];
+
+    const wantApps = input.sourceType === "application" || input.sourceType === "mixed";
+    const wantTenants = input.sourceType === "tenant" || input.sourceType === "mixed";
+
+    const [appsFresh, tenantsFresh] = await Promise.all([
+      wantApps
+        ? supabaseAdmin
+            .from("merchant_applications")
+            .select("id, full_name, email")
+            .in("id", input.recipientIds)
+        : Promise.resolve({ data: [], error: null }),
+      wantTenants
+        ? supabaseAdmin
+            .from("merchants")
+            .select("id, owner_name, name, owner_email")
+            .in("id", input.recipientIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (appsFresh.error) throw new Error(appsFresh.error.message);
+    if (tenantsFresh.error) throw new Error(tenantsFresh.error.message);
+
+    const map = new Map<string, { email: string; name?: string }>();
+    for (const a of appsFresh.data ?? []) {
+      if (!a.email?.trim()) continue;
+      map.set(a.email.toLowerCase(), { email: a.email.trim(), name: a.full_name });
+    }
+    for (const t of tenantsFresh.data ?? []) {
+      if (!t.owner_email?.trim()) continue;
+      map.set(t.owner_email.toLowerCase(), {
+        email: t.owner_email.trim(),
+        name: t.owner_name ?? t.name,
+      });
+    }
+    return Array.from(map.values());
+  }
+
+  // scope === all
+  let appsQuery = supabaseAdmin.from("merchant_applications").select("id, full_name, email");
+  let tenantsQuery = supabaseAdmin.from("merchants").select("id, owner_name, name, owner_email");
+
+  if (input.sourceType === "application") {
+    const { data, error } = await appsQuery;
+    if (error) throw new Error(error.message);
+    const map = new Map<string, { email: string; name?: string }>();
+    for (const a of data ?? []) {
+      if (!a.email?.trim()) continue;
+      map.set(a.email.toLowerCase(), { email: a.email.trim(), name: a.full_name });
+    }
+    return Array.from(map.values());
+  }
+
+  if (input.sourceType === "tenant") {
+    const { data, error } = await tenantsQuery;
+    if (error) throw new Error(error.message);
+    const map = new Map<string, { email: string; name?: string }>();
+    for (const t of data ?? []) {
+      if (!t.owner_email?.trim()) continue;
+      map.set(t.owner_email.toLowerCase(), {
+        email: t.owner_email.trim(),
+        name: t.owner_name ?? t.name,
+      });
+    }
+    return Array.from(map.values());
+  }
+
+  const [apps, tenants] = await Promise.all([appsQuery, tenantsQuery]);
+  if (apps.error) throw new Error(apps.error.message);
+  if (tenants.error) throw new Error(tenants.error.message);
+
+  const map = new Map<string, { email: string; name?: string }>();
+  for (const a of apps.data ?? []) {
+    if (!a.email?.trim()) continue;
+    map.set(a.email.toLowerCase(), { email: a.email.trim(), name: a.full_name });
+  }
+  for (const t of tenants.data ?? []) {
+    if (!t.owner_email?.trim()) continue;
+    map.set(t.owner_email.toLowerCase(), {
+      email: t.owner_email.trim(),
+      name: t.owner_name ?? t.name,
+    });
+  }
+  return Array.from(map.values());
+}
+
+async function resolveSmsRecipients(input: {
+  scope: "all" | "selected";
+  recipientIds: string[];
+}) {
+  // SMS v1: applications only (tenants have no reliable phone field)
+  let query = supabaseAdmin
+    .from("merchant_applications")
+    .select("id, full_name, phone, store_name, business_name");
+
+  if (input.scope === "selected") {
+    if (!input.recipientIds.length) return [];
+    query = query.in("id", input.recipientIds);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const map = new Map<string, { phone: string; name?: string }>();
+  for (const row of data ?? []) {
+    if (!row.phone?.trim()) continue;
+    const phone = normalizePhone(row.phone);
+    if (!phone) continue;
+    map.set(phone, {
+      phone,
+      name: row.full_name || row.store_name || row.business_name || undefined,
+    });
+  }
+  return Array.from(map.values());
+}
+
+const emailSendSchema = z.object({
+  scope: z.enum(["all", "selected"]),
+  recipientIds: z.array(z.string()).default([]),
+  sourceType: z.enum(["application", "tenant", "mixed"]).default("mixed"),
+  title: z.string().min(1),
+  body: z.string().min(1),
+});
+
+const smsSendSchema = z.object({
+  scope: z.enum(["all", "selected"]),
+  recipientIds: z.array(z.string()).default([]),
+  body: z.string().min(1),
+});
+
+export const sendOpsEmail = createServerFn({ method: "POST" })
+  .inputValidator(emailSendSchema)
+  .handler(async ({ data }): Promise<SendMessagingResult> => {
+    if (data.scope === "selected" && !data.recipientIds.length) {
+      throw new Error("Select at least one recipient");
+    }
+
+    const recipients = await resolveEmailRecipients({
+      scope: data.scope,
+      recipientIds: data.recipientIds,
+      sourceType: data.sourceType,
+    });
+
+    if (!recipients.length) throw new Error("No valid email recipients resolved");
+
+    const html = buildOpsMessageEmail({ title: data.title.trim(), body: data.body.trim() });
+    const result = await sendEmailsViaResend({
+      recipients,
+      subject: data.title.trim(),
+      html,
+      text: data.body.trim(),
+    });
+
+    return {
+      sent: result.sent,
+      failed: result.failed,
+      recipientCount: recipients.length,
+      results: result.results,
+    };
+  });
+
+export const sendOpsSms = createServerFn({ method: "POST" })
+  .inputValidator(smsSendSchema)
+  .handler(async ({ data }): Promise<SendMessagingResult> => {
+    if (data.scope === "selected" && !data.recipientIds.length) {
+      throw new Error("Select at least one recipient");
+    }
+
+    const recipients = await resolveSmsRecipients({
+      scope: data.scope,
+      recipientIds: data.recipientIds,
+    });
+
+    if (!recipients.length) {
+      throw new Error("No SMS-eligible recipients — applications with phone numbers only");
+    }
+
+    const result = await sendSmsViaMoolre({
+      recipients,
+      message: data.body.trim(),
+    });
+
+    return {
+      sent: result.sent,
+      failed: result.failed,
+      recipientCount: recipients.length,
+      results: result.results,
+    };
+  });
+
+/** Preview how many recipients a send would hit (server-resolved). */
+export const previewMessagingRecipients = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      channel: z.enum(["email", "sms"]),
+      scope: z.enum(["all", "selected"]),
+      recipientIds: z.array(z.string()).default([]),
+      sourceType: z.enum(["application", "tenant", "mixed"]).default("mixed"),
+    }),
+  )
+  .handler(async ({ data }): Promise<{ count: number }> => {
+    if (data.channel === "email") {
+      const recipients = await resolveEmailRecipients({
+        scope: data.scope,
+        recipientIds: data.recipientIds,
+        sourceType: data.sourceType,
+      });
+      return { count: recipients.length };
+    }
+
+    const recipients = await resolveSmsRecipients({
+      scope: data.scope,
+      recipientIds: data.recipientIds,
+    });
+    return { count: recipients.length };
+  });

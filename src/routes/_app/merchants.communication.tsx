@@ -1,13 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { Check, Mail, MessageSquare, Search, Send, Users, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Mail, MessageSquare, Search, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
-  listCommunicationRecipients,
-  sendMerchantCommunication,
-  type CommunicationRecipient,
-  type SendCommunicationResult,
+  listMessagingAudience,
+  previewMessagingRecipients,
+  sendOpsEmail,
+  sendOpsSms,
+  type MessagingAudienceItem,
+  type SendMessagingResult,
 } from "@/lib/api/communication.functions";
 import { PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -16,179 +18,48 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_app/merchants/communication")({
-  head: () => ({ meta: [{ title: "Communication — Seltra Ops" }] }),
-  component: MerchantCommunicationPage,
+  head: () => ({ meta: [{ title: "Messaging — Seltra Ops" }] }),
+  component: MessagingPage,
 });
 
-type Channel = "email" | "sms" | "both";
-type Audience = "merchants" | "applications" | "all";
+type Scope = "all" | "selected";
 
-const TEMPLATES = [
-  {
-    id: "welcome",
-    label: "Welcome",
-    subject: "Welcome to Seltra",
-    message:
-      "Hi {{name}},\n\nWelcome to Seltra. Your store is live and our ops team is here if you need anything.\n\n— Seltra Ops",
-  },
-  {
-    id: "update",
-    label: "Product update",
-    subject: "New update from Seltra",
-    message:
-      "Hi {{name}},\n\nWe shipped an update that may help your store. Reply to this message if you want a walkthrough.\n\n— Seltra Ops",
-  },
-  {
-    id: "nudge",
-    label: "Check-in",
-    subject: "Quick check-in from Seltra",
-    message:
-      "Hi {{name}},\n\nJust checking in — how are things going with your store this week?\n\n— Seltra Ops",
-  },
-];
+function MessagingPage() {
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [smsOpen, setSmsOpen] = useState(false);
+  const [lastResult, setLastResult] = useState<{ channel: "email" | "sms"; result: SendMessagingResult } | null>(
+    null,
+  );
 
-function MerchantCommunicationPage() {
-  const [channel, setChannel] = useState<Channel>("email");
-  const [audience, setAudience] = useState<Audience>("merchants");
-  const [search, setSearch] = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-  const [extraEmails, setExtraEmails] = useState("");
-  const [extraPhones, setExtraPhones] = useState("");
-  const [lastResult, setLastResult] = useState<SendCommunicationResult | null>(null);
-
-  const { data: recipients = [], isLoading } = useQuery({
-    queryKey: ["communication-recipients"],
+  const { data: audience = [], isLoading } = useQuery({
+    queryKey: ["messaging-audience"],
     staleTime: 1000 * 60 * 2,
-    queryFn: () => listCommunicationRecipients(),
+    queryFn: () => listMessagingAudience(),
   });
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return recipients.filter((r) => {
-      if (audience === "merchants" && r.source !== "merchant") return false;
-      if (audience === "applications" && r.source !== "application") return false;
-      if (!q) return true;
-      return (
-        r.storeName.toLowerCase().includes(q) ||
-        r.ownerName.toLowerCase().includes(q) ||
-        r.email?.toLowerCase().includes(q) ||
-        r.phone?.includes(q)
-      );
-    });
-  }, [recipients, audience, search]);
-
-  const selectedRecipients = useMemo(
-    () => recipients.filter((r) => selectedIds.has(r.id)),
-    [recipients, selectedIds],
+  const emailEligible = useMemo(() => audience.filter((a) => Boolean(a.email)), [audience]);
+  const smsEligible = useMemo(
+    () => audience.filter((a) => a.source === "application" && a.smsEligible),
+    [audience],
   );
-
-  const emailReadyCount = selectedRecipients.filter((r) => Boolean(r.email)).length;
-  const smsReadyCount = selectedRecipients.filter((r) => Boolean(r.phone)).length;
-
-  const parsedExtraEmails = useMemo(
-    () =>
-      extraEmails
-        .split(/[\n,;]+/)
-        .map((s) => s.trim())
-        .filter((s) => s.includes("@")),
-    [extraEmails],
-  );
-
-  const parsedExtraPhones = useMemo(
-    () =>
-      extraPhones
-        .split(/[\n,;]+/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-    [extraPhones],
-  );
-
-  const outboundCount =
-    channel === "sms"
-      ? smsReadyCount + parsedExtraPhones.length
-      : channel === "email"
-        ? emailReadyCount + parsedExtraEmails.length
-        : emailReadyCount + parsedExtraEmails.length + smsReadyCount + parsedExtraPhones.length;
-
-  const previewName = selectedRecipients[0]?.ownerName ?? "Ama";
-  const previewBody = message.replaceAll("{{name}}", previewName) || "Your message preview will appear here…";
-  const smsChars = message.replaceAll("{{name}}", previewName).length;
-
-  const sendMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedRecipients.length && !parsedExtraEmails.length && !parsedExtraPhones.length) {
-        throw new Error("Select at least one recipient");
-      }
-      if (!message.trim()) throw new Error("Message is required");
-
-      const channels =
-        channel === "both" ? (["email", "sms"] as const) : ([channel] as Array<"email" | "sms">);
-
-      if (channels.includes("email") && !subject.trim()) {
-        throw new Error("Email subject is required");
-      }
-
-      return sendMerchantCommunication({
-        data: {
-          channels: [...channels],
-          subject: subject.trim() || undefined,
-          message: message.trim(),
-          recipients: selectedRecipients,
-          extraEmails: parsedExtraEmails,
-          extraPhones: parsedExtraPhones,
-        },
-      });
-    },
-    onSuccess: (result) => {
-      setLastResult(result);
-      const emailSent = result.email?.sent ?? 0;
-      const smsSent = result.sms?.sent ?? 0;
-      const emailFailed = result.email?.failed ?? 0;
-      const smsFailed = result.sms?.failed ?? 0;
-      toast.success(
-        `Sent — email ${emailSent}/${emailSent + emailFailed}, SMS ${smsSent}/${smsSent + smsFailed}`,
-      );
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  function toggleOne(id: string, checked: boolean) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }
-
-  function selectAllFiltered() {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      filtered.forEach((r) => next.add(r.id));
-      return next;
-    });
-  }
-
-  function applyTemplate(id: string) {
-    const template = TEMPLATES.find((t) => t.id === id);
-    if (!template) return;
-    setSubject(template.subject);
-    setMessage(template.message);
-    if (channel === "sms") setChannel("email");
-  }
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Communication" subtitle="Broadcast email and SMS to merchants" />
-        <Skeleton className="h-40 w-full rounded-2xl" />
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <Skeleton className="h-96 w-full rounded-2xl" />
-          <Skeleton className="h-96 w-full rounded-2xl" />
+        <PageHeader title="Messaging" subtitle="Send email and SMS from Ops" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Skeleton className="h-48 rounded-2xl" />
+          <Skeleton className="h-48 rounded-2xl" />
         </div>
       </div>
     );
@@ -197,323 +68,549 @@ function MerchantCommunicationPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Communication"
-        subtitle="Broadcast to merchants and applicants via Resend email and Moolre SMS"
-        action={
-          <Button
-            className="gap-2"
-            disabled={sendMutation.isPending || outboundCount === 0}
-            onClick={() => sendMutation.mutate()}
-          >
-            <Send className="h-4 w-4" />
-            {sendMutation.isPending ? "Sending…" : `Send to ${outboundCount || 0}`}
-          </Button>
-        }
+        title="Messaging"
+        subtitle="Broadcast to merchants and applicants via Resend and Moolre — compose in Ops, send directly"
       />
 
-      {/* Channel + reach strip — messaging console, not analytics cards */}
-      <div
-        className="rounded-2xl border border-border overflow-hidden"
-        style={{
-          background: "linear-gradient(135deg, #0b1f1a 0%, #12352c 55%, #0d2430 100%)",
-        }}
-      >
-        <div className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-xs font-mono uppercase tracking-widest text-white/50">Broadcast channel</div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(
-                [
-                  { id: "email" as const, label: "Email", icon: Mail, hint: "Resend" },
-                  { id: "sms" as const, label: "SMS", icon: MessageSquare, hint: "Moolre" },
-                  { id: "both" as const, label: "Both", icon: Send, hint: "Email + SMS" },
-                ] as const
-              ).map((opt) => {
-                const active = channel === opt.id;
-                const Icon = opt.icon;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setChannel(opt.id)}
-                    className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm transition-all ${
-                      active
-                        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                        : "bg-white/5 text-white/80 hover:bg-white/10"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span className="font-medium">{opt.label}</span>
-                    <span className={`text-[10px] ${active ? "text-primary-foreground/80" : "text-white/40"}`}>
-                      {opt.hint}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <button
+          type="button"
+          onClick={() => setEmailOpen(true)}
+          className="group text-left rounded-2xl border border-border bg-card p-6 shadow-card transition-all hover:border-primary/40 hover:shadow-md"
+        >
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-soft text-primary">
+            <Mail className="h-5 w-5" />
           </div>
+          <h2 className="mt-4 text-lg font-semibold text-navy">Send Email</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Resend · branded Seltra template · merchants and applicants with email
+          </p>
+          <p className="mt-4 text-xs font-mono text-muted-foreground">
+            {emailEligible.length} email-ready contacts
+          </p>
+        </button>
 
-          <div className="flex gap-6 text-right">
-            <div>
-              <div className="text-2xl font-semibold text-white font-mono">{selectedIds.size}</div>
-              <div className="text-xs text-white/45">Selected</div>
-            </div>
-            <div>
-              <div className="text-2xl font-semibold text-white font-mono">{emailReadyCount}</div>
-              <div className="text-xs text-white/45">Email ready</div>
-            </div>
-            <div>
-              <div className="text-2xl font-semibold text-white font-mono">{smsReadyCount}</div>
-              <div className="text-xs text-white/45">SMS ready</div>
-            </div>
+        <button
+          type="button"
+          onClick={() => setSmsOpen(true)}
+          className="group text-left rounded-2xl border border-border bg-card p-6 shadow-card transition-all hover:border-primary/40 hover:shadow-md"
+        >
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-soft text-primary">
+            <MessageSquare className="h-5 w-5" />
           </div>
-        </div>
+          <h2 className="mt-4 text-lg font-semibold text-navy">Send SMS</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Moolre · applications with phone only · tenants without phone are excluded
+          </p>
+          <p className="mt-4 text-xs font-mono text-muted-foreground">
+            {smsEligible.length} SMS-ready applicants
+          </p>
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-        {/* Compose — primary surface */}
-        <section className="xl:col-span-7 rounded-2xl border border-border bg-card shadow-card overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+      {lastResult && (
+        <div className="rounded-2xl border border-primary/20 bg-primary-soft/30 px-5 py-4 text-sm">
+          <div className="font-medium text-navy">
+            Last {lastResult.channel === "email" ? "email" : "SMS"} broadcast
+          </div>
+          <div className="mt-1 text-muted-foreground">
+            {lastResult.result.sent} sent · {lastResult.result.failed} failed ·{" "}
+            {lastResult.result.recipientCount} resolved
+          </div>
+        </div>
+      )}
+
+      <EmailModal
+        open={emailOpen}
+        onOpenChange={setEmailOpen}
+        audience={audience}
+        onSent={(result) => {
+          setLastResult({ channel: "email", result });
+          setEmailOpen(false);
+        }}
+      />
+
+      <SmsModal
+        open={smsOpen}
+        onOpenChange={setSmsOpen}
+        audience={audience}
+        onSent={(result) => {
+          setLastResult({ channel: "sms", result });
+          setSmsOpen(false);
+        }}
+      />
+    </div>
+  );
+}
+
+function EmailModal({
+  open,
+  onOpenChange,
+  audience,
+  onSent,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  audience: MessagingAudienceItem[];
+  onSent: (result: SendMessagingResult) => void;
+}) {
+  const [scope, setScope] = useState<Scope>("selected");
+  const [search, setSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [previewCount, setPreviewCount] = useState<number | null>(null);
+
+  const emailPool = useMemo(() => audience.filter((a) => Boolean(a.email)), [audience]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return emailPool;
+    return emailPool.filter(
+      (a) =>
+        a.label.toLowerCase().includes(q) ||
+        a.ownerName.toLowerCase().includes(q) ||
+        a.email?.toLowerCase().includes(q),
+    );
+  }, [emailPool, search]);
+
+  useEffect(() => {
+    if (!open) {
+      setScope("selected");
+      setSearch("");
+      setSelectedIds(new Set());
+      setTitle("");
+      setBody("");
+      setConfirmOpen(false);
+      setPreviewCount(null);
+    }
+  }, [open]);
+
+  const previewMutation = useMutation({
+    mutationFn: () =>
+      previewMessagingRecipients({
+        data: {
+          channel: "email",
+          scope,
+          recipientIds: scope === "selected" ? Array.from(selectedIds) : [],
+          sourceType: "mixed",
+        },
+      }),
+    onSuccess: (data) => {
+      setPreviewCount(data.count);
+      setConfirmOpen(true);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: () =>
+      sendOpsEmail({
+        data: {
+          scope,
+          recipientIds: scope === "selected" ? Array.from(selectedIds) : [],
+          sourceType: "mixed",
+          title: title.trim(),
+          body: body.trim(),
+        },
+      }),
+    onSuccess: (result) => {
+      toast.success(`Email sent to ${result.sent} of ${result.recipientCount}`);
+      setConfirmOpen(false);
+      onSent(result);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  function requestSend() {
+    if (!title.trim()) return toast.error("Title is required");
+    if (!body.trim()) return toast.error("Body is required");
+    if (scope === "selected" && selectedIds.size === 0) {
+      return toast.error("Select at least one recipient, or choose All");
+    }
+    previewMutation.mutate();
+  }
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Send Email</DialogTitle>
+            <DialogDescription>
+              Recipients are resolved on the server from current merchant/application records.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            <RecipientScope
+              scope={scope}
+              onScopeChange={setScope}
+              search={search}
+              onSearchChange={setSearch}
+              items={filtered}
+              selectedIds={selectedIds}
+              onToggle={(id, checked) => {
+                setSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  if (checked) next.add(id);
+                  else next.delete(id);
+                  return next;
+                });
+              }}
+              onSelectAll={() => setSelectedIds(new Set(filtered.map((i) => i.id)))}
+              mode="email"
+            />
+
             <div>
-              <h2 className="text-sm font-semibold text-foreground">Compose</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Write once, personalize with {"{{name}}"}</p>
+              <Label htmlFor="email-title">Title</Label>
+              <Input
+                id="email-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Email subject"
+                className="mt-1.5"
+              />
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {TEMPLATES.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => applyTemplate(t.id)}
-                  className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
-                >
-                  {t.label}
-                </button>
-              ))}
+
+            <div>
+              <Label htmlFor="email-body">Body</Label>
+              <Textarea
+                id="email-body"
+                rows={7}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Write your message…"
+                className="mt-1.5"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Line breaks are preserved in the branded email.</p>
             </div>
           </div>
 
-          <div className="p-5 space-y-4">
-            {(channel === "email" || channel === "both") && (
-              <div>
-                <Label htmlFor="subject">Subject</Label>
-                <Input
-                  id="subject"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Update from Seltra Ops"
-                  className="mt-1.5 bg-surface-muted border-input"
-                />
-              </div>
-            )}
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button className="gap-2" disabled={previewMutation.isPending} onClick={requestSend}>
+              <Send className="h-4 w-4" />
+              {previewMutation.isPending ? "Checking…" : "Review & send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmSendDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        count={previewCount ?? 0}
+        channel="email"
+        pending={sendMutation.isPending}
+        onConfirm={() => sendMutation.mutate()}
+      />
+    </>
+  );
+}
+
+function SmsModal({
+  open,
+  onOpenChange,
+  audience,
+  onSent,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  audience: MessagingAudienceItem[];
+  onSent: (result: SendMessagingResult) => void;
+}) {
+  const [scope, setScope] = useState<Scope>("selected");
+  const [search, setSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [body, setBody] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [previewCount, setPreviewCount] = useState<number | null>(null);
+
+  // SMS picker: applications only; show ineligible tenants greyed if mixed view — guide says apps only
+  const smsPool = useMemo(
+    () => audience.filter((a) => a.source === "application"),
+    [audience],
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return smsPool;
+    return smsPool.filter(
+      (a) =>
+        a.label.toLowerCase().includes(q) ||
+        a.ownerName.toLowerCase().includes(q) ||
+        a.phone?.includes(q),
+    );
+  }, [smsPool, search]);
+
+  useEffect(() => {
+    if (!open) {
+      setScope("selected");
+      setSearch("");
+      setSelectedIds(new Set());
+      setBody("");
+      setConfirmOpen(false);
+      setPreviewCount(null);
+    }
+  }, [open]);
+
+  const previewMutation = useMutation({
+    mutationFn: () =>
+      previewMessagingRecipients({
+        data: {
+          channel: "sms",
+          scope,
+          recipientIds: scope === "selected" ? Array.from(selectedIds) : [],
+        },
+      }),
+    onSuccess: (data) => {
+      setPreviewCount(data.count);
+      setConfirmOpen(true);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: () =>
+      sendOpsSms({
+        data: {
+          scope,
+          recipientIds: scope === "selected" ? Array.from(selectedIds) : [],
+          body: body.trim(),
+        },
+      }),
+    onSuccess: (result) => {
+      toast.success(`SMS sent to ${result.sent} of ${result.recipientCount}`);
+      setConfirmOpen(false);
+      onSent(result);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  function requestSend() {
+    if (!body.trim()) return toast.error("Message body is required");
+    if (scope === "selected" && selectedIds.size === 0) {
+      return toast.error("Select at least one recipient, or choose All applicants");
+    }
+    previewMutation.mutate();
+  }
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Send SMS</DialogTitle>
+            <DialogDescription>
+              Applications with phone numbers only. Tenants without a phone field are not included.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            <RecipientScope
+              scope={scope}
+              onScopeChange={setScope}
+              search={search}
+              onSearchChange={setSearch}
+              items={filtered}
+              selectedIds={selectedIds}
+              onToggle={(id, checked) => {
+                setSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  if (checked) next.add(id);
+                  else next.delete(id);
+                  return next;
+                });
+              }}
+              onSelectAll={() =>
+                setSelectedIds(new Set(filtered.filter((i) => i.smsEligible).map((i) => i.id)))
+              }
+              mode="sms"
+            />
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <Label htmlFor="message">Message</Label>
-                {channel !== "email" && (
-                  <span className={`text-[11px] font-mono ${smsChars > 160 ? "text-warning" : "text-muted-foreground"}`}>
-                    {smsChars}/160 SMS units
-                  </span>
-                )}
-              </div>
-              <Textarea
-                id="message"
-                rows={10}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={"Hi {{name}},\n\nWe have an update for your Seltra store…"}
-                className="bg-surface-muted border-input font-normal leading-relaxed"
-              />
-            </div>
-
-            {(channel === "email" || channel === "both") && (
-              <div>
-                <Label htmlFor="extraEmails">Extra emails</Label>
-                <Input
-                  id="extraEmails"
-                  value={extraEmails}
-                  onChange={(e) => setExtraEmails(e.target.value)}
-                  placeholder="optional@email.com, another@email.com"
-                  className="mt-1.5 bg-surface-muted border-input"
-                />
-              </div>
-            )}
-
-            {(channel === "sms" || channel === "both") && (
-              <div>
-                <Label htmlFor="extraPhones">Extra phones</Label>
-                <Input
-                  id="extraPhones"
-                  value={extraPhones}
-                  onChange={(e) => setExtraPhones(e.target.value)}
-                  placeholder="024… or 233…"
-                  className="mt-1.5 bg-surface-muted border-input"
-                />
-              </div>
-            )}
-
-            {/* Live preview */}
-            <div className="rounded-xl border border-dashed border-border bg-surface-muted/40 p-4">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">
-                Preview · {channel === "sms" ? "SMS" : channel === "both" ? "Email + SMS" : "Email"}
-              </div>
-              {(channel === "email" || channel === "both") && (
-                <div className="text-xs text-muted-foreground mb-1">
-                  Subject: <span className="text-navy">{subject || "—"}</span>
-                </div>
-              )}
-              <div className="text-sm text-navy whitespace-pre-wrap leading-relaxed">{previewBody}</div>
-            </div>
-
-            {lastResult && (
-              <div className="rounded-xl border border-primary/20 bg-primary-soft/40 p-4 text-xs space-y-2">
-                <div className="font-medium text-navy flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-primary" />
-                  Last broadcast
-                </div>
-                {lastResult.email && (
-                  <div className="text-muted-foreground">
-                    Email · {lastResult.email.sent} sent · {lastResult.email.failed} failed
-                  </div>
-                )}
-                {lastResult.sms && (
-                  <div className="text-muted-foreground">
-                    SMS · {lastResult.sms.sent} sent · {lastResult.sms.failed} failed
-                  </div>
-                )}
-                <div className="max-h-28 overflow-y-auto space-y-1 pt-1 border-t border-border/60">
-                  {[...(lastResult.email?.results ?? []), ...(lastResult.sms?.results ?? [])].map((r, i) => (
-                    <div key={`${r.to}-${i}`} className={r.ok ? "text-muted-foreground" : "text-destructive"}>
-                      {r.to} — {r.ok ? "delivered" : r.error}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Audience picker */}
-        <section className="xl:col-span-5 rounded-2xl border border-border bg-card shadow-card overflow-hidden flex flex-col max-h-[42rem]">
-          <div className="border-b border-border px-5 py-4 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <Users className="h-4 w-4 text-primary" />
-                  Audience
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {selectedIds.size} selected of {filtered.length} shown
-                </p>
-              </div>
-              <div className="flex gap-1.5">
-                <Button size="sm" variant="outline" onClick={selectAllFiltered}>
-                  All
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
-                  Clear
-                </Button>
-              </div>
-            </div>
-
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search audience…"
-                className="pl-9 bg-surface-muted border-input"
-              />
-            </div>
-
-            <div className="flex gap-1.5">
-              {(
-                [
-                  { id: "merchants" as const, label: "Merchants" },
-                  { id: "applications" as const, label: "Applicants" },
-                  { id: "all" as const, label: "All" },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setAudience(opt.id)}
-                  className={`rounded-lg px-2.5 py-1 text-xs transition-colors ${
-                    audience === opt.id
-                      ? "bg-primary-soft text-primary font-medium"
-                      : "text-muted-foreground hover:bg-surface-muted"
+                <Label htmlFor="sms-body">Message</Label>
+                <span
+                  className={`text-[11px] font-mono ${
+                    body.length > 160 ? "text-warning" : "text-muted-foreground"
                   }`}
                 >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
-            {selectedRecipients.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
-                {selectedRecipients.slice(0, 12).map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => toggleOne(r.id, false)}
-                    className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] text-primary"
-                  >
-                    {r.storeName}
-                    <X className="h-3 w-3" />
-                  </button>
-                ))}
-                {selectedRecipients.length > 12 && (
-                  <span className="text-[11px] text-muted-foreground self-center">
-                    +{selectedRecipients.length - 12} more
-                  </span>
-                )}
+                  {body.length}/160 {body.length > 160 ? "(multi-segment)" : "segment"}
+                </span>
               </div>
-            )}
+              <Textarea
+                id="sms-body"
+                rows={5}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="SMS body…"
+              />
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto divide-y divide-border">
-            {filtered.map((r) => {
-              const checked = selectedIds.has(r.id);
-              const canEmail = Boolean(r.email);
-              const canSms = Boolean(r.phone);
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button className="gap-2" disabled={previewMutation.isPending} onClick={requestSend}>
+              <Send className="h-4 w-4" />
+              {previewMutation.isPending ? "Checking…" : "Review & send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmSendDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        count={previewCount ?? 0}
+        channel="sms"
+        pending={sendMutation.isPending}
+        onConfirm={() => sendMutation.mutate()}
+      />
+    </>
+  );
+}
+
+function RecipientScope({
+  scope,
+  onScopeChange,
+  search,
+  onSearchChange,
+  items,
+  selectedIds,
+  onToggle,
+  onSelectAll,
+  mode,
+}: {
+  scope: Scope;
+  onScopeChange: (scope: Scope) => void;
+  search: string;
+  onSearchChange: (value: string) => void;
+  items: MessagingAudienceItem[];
+  selectedIds: Set<string>;
+  onToggle: (id: string, checked: boolean) => void;
+  onSelectAll: () => void;
+  mode: "email" | "sms";
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => onScopeChange("all")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            scope === "all" ? "bg-primary text-primary-foreground" : "bg-surface-muted text-muted-foreground"
+          }`}
+        >
+          {mode === "sms" ? "All applicants" : "All contacts"}
+        </button>
+        <button
+          type="button"
+          onClick={() => onScopeChange("selected")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            scope === "selected" ? "bg-primary text-primary-foreground" : "bg-surface-muted text-muted-foreground"
+          }`}
+        >
+          Select specific
+        </button>
+      </div>
+
+      {scope === "selected" && (
+        <div className="rounded-xl border border-border overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+            <Search className="h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Search…"
+              className="h-8 border-0 bg-transparent shadow-none focus-visible:ring-0 px-0"
+            />
+            <Button size="sm" variant="ghost" onClick={onSelectAll}>
+              All shown
+            </Button>
+          </div>
+          <div className="max-h-48 overflow-y-auto divide-y divide-border">
+            {items.map((item) => {
+              const disabled = mode === "sms" && !item.smsEligible;
               return (
                 <label
-                  key={r.id}
-                  className={`flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-surface-muted/60 ${
-                    checked ? "bg-primary-soft/30" : ""
+                  key={item.id}
+                  className={`flex items-start gap-3 px-3 py-2.5 text-sm ${
+                    disabled ? "opacity-45 cursor-not-allowed" : "cursor-pointer hover:bg-surface-muted/60"
                   }`}
                 >
                   <Checkbox
-                    checked={checked}
-                    onCheckedChange={(v) => toggleOne(r.id, v === true)}
-                    className="mt-1"
+                    checked={selectedIds.has(item.id)}
+                    disabled={disabled}
+                    onCheckedChange={(v) => !disabled && onToggle(item.id, v === true)}
+                    className="mt-0.5"
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium text-navy">{r.storeName}</span>
-                      <span className="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {r.source === "merchant" ? "store" : "applicant"}
-                      </span>
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground mt-0.5">{r.ownerName}</div>
-                    <div className="mt-1.5 flex flex-wrap gap-2 text-[11px]">
-                      <span className={canEmail ? "text-primary" : "text-warning"}>
-                        {canEmail ? r.email : "no email"}
-                      </span>
-                      <span className="text-border">·</span>
-                      <span className={canSms ? "text-primary" : "text-warning"}>
-                        {canSms ? r.phone : "no phone"}
-                      </span>
+                    <div className="font-medium text-navy truncate">{item.label}</div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {item.ownerName}
+                      {mode === "email" && item.email ? ` · ${item.email}` : ""}
+                      {mode === "sms" && (item.smsEligible ? ` · ${item.phone}` : " · no phone on file")}
                     </div>
                   </div>
                 </label>
               );
             })}
-            {!filtered.length && (
-              <div className="py-12 text-center text-xs text-muted-foreground">No matches for this audience</div>
+            {!items.length && (
+              <div className="py-8 text-center text-xs text-muted-foreground">No matches</div>
             )}
           </div>
-        </section>
-      </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function ConfirmSendDialog({
+  open,
+  onOpenChange,
+  count,
+  channel,
+  pending,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  count: number;
+  channel: "email" | "sms";
+  pending: boolean;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Confirm send</DialogTitle>
+          <DialogDescription>
+            {channel === "email"
+              ? `Send this email to ${count} contact${count === 1 ? "" : "s"}?`
+              : `Send this SMS to ${count} applicant${count === 1 ? "" : "s"}?`}
+          </DialogDescription>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground">
+          This cannot be undone. Recipient contacts are resolved fresh on the server right before send.
+        </p>
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button className="gap-2" disabled={pending || count === 0} onClick={onConfirm}>
+            <Send className="h-4 w-4" />
+            {pending ? "Sending…" : `Send to ${count}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

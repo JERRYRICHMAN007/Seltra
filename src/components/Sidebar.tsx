@@ -36,7 +36,7 @@ const groups = [
   {
     label: "Merchants",
     items: [
-      { to: "/merchants/communication", label: "Communication", icon: Megaphone },
+      { to: "/merchants/communication", label: "Messaging", icon: Megaphone },
       { to: "/merchants", label: "All Merchants", icon: Users },
       { to: "/merchants/applications", label: "Merchant Applications", icon: FileText },
       { to: "/merchants/success", label: "Merchant Success", icon: Heart },

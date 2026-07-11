@@ -1,14 +1,41 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  exportMerchantsCsv,
+  getMerchantDetail,
+  listMerchants,
+  patchMerchant,
+  removeMerchant,
+} from "@/lib/api/merchants.functions";
+import { merchantsFromSupabase, merchantsResponseToResult } from "@/lib/api/merchants-mappers";
+import type { MerchantRow, MerchantSortBy, SortDir } from "@/lib/api/merchants.types";
 import { PageHeader, StatusBadge, Card } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
-import { formatGHS, timeAgo, shortDate, exportCsv } from "@/lib/format";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { downloadTextFile, exportCsv, formatGHS, shortDate } from "@/lib/format";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/_app/merchants/")({
   head: () => ({ meta: [{ title: "Merchants — Seltra Ops" }] }),
@@ -17,57 +44,129 @@ export const Route = createFileRoute("/_app/merchants/")({
 
 function MerchantsPage() {
   const queryClient = useQueryClient();
-  const { data: merchants = [], isLoading: merchantsLoading } = useQuery({
-    queryKey: ["merchants"],
-    staleTime: 1000 * 60 * 2,
-    gcTime: 1000 * 60 * 5,
-    queryFn: async () => (await supabase.from("merchants").select("*").order("created_at", { ascending: false })).data ?? [],
-  });
-  const { data: orders = [], isLoading: ordersLoading } = useQuery({
-    queryKey: ["orders-by-merchant"],
-    staleTime: 1000 * 60 * 2,
-    gcTime: 1000 * 60 * 5,
-    queryFn: async () => (await supabase.from("orders").select("merchant_id,total_amount,status")).data ?? [],
-  });
-  const isLoading = merchantsLoading || ordersLoading;
+  const { user } = useAuth();
+  const opsActor = user?.email ?? "ops@seltra.co";
 
-  const gmvByMerchant = new Map<string, { gmv: number; count: number }>();
-  orders.forEach((o: any) => {
-    if (o.status !== "paid") return;
-    const prev = gmvByMerchant.get(o.merchant_id) ?? { gmv: 0, count: 0 };
-    gmvByMerchant.set(o.merchant_id, { gmv: prev.gmv + Number(o.total_amount), count: prev.count + 1 });
-  });
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [businessTypeFilter, setBusinessTypeFilter] = useState("");
+  const [countryFilter, setCountryFilter] = useState("");
+  const [sortBy, setSortBy] = useState<MerchantSortBy>("joined");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [page, setPage] = useState(1);
 
   const [editOpen, setEditOpen] = useState(false);
-  const [selected, setSelected] = useState<any>(null);
-  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<MerchantRow | null>(null);
 
-  const filteredMerchants = merchants.filter((m: any) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      m.name?.toLowerCase().includes(q) ||
-      m.slug?.toLowerCase().includes(q) ||
-      m.owner_name?.toLowerCase().includes(q)
-    );
+  const listQuery = useMemo(
+    () => ({
+      search: search.trim() || undefined,
+      status: statusFilter === "all" ? undefined : statusFilter,
+      businessType: businessTypeFilter.trim() || undefined,
+      country: countryFilter.trim() || undefined,
+      sortBy,
+      sortDir,
+      page,
+    }),
+    [search, statusFilter, businessTypeFilter, countryFilter, sortBy, sortDir, page],
+  );
+
+  const { data: merchantsResult, isLoading: merchantsLoading, isError: merchantsApiFailed } = useQuery({
+    queryKey: ["merchants", listQuery],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
+    retry: false,
+    queryFn: () => listMerchants({ data: listQuery }).then(merchantsResponseToResult),
   });
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this merchant? This cannot be undone.")) return;
-    const { error } = await supabase.from("merchants").delete().eq("id", id);
-    if (error) return console.error(error);
-    queryClient.invalidateQueries({ queryKey: ["merchants"] });
+  const { data: fallbackData, isLoading: fallbackLoading } = useQuery({
+    queryKey: ["merchants-fallback"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
+    enabled: merchantsApiFailed,
+    queryFn: async () => {
+      const [merchants, orders] = await Promise.all([
+        supabase.from("merchants").select("*").order("created_at", { ascending: false }),
+        supabase.from("orders").select("merchant_id,total_amount,status"),
+      ]);
+      return {
+        merchants: merchants.data ?? [],
+        orders: orders.data ?? [],
+      };
+    },
+  });
+
+  const resolvedResult = useMemo(() => {
+    if (merchantsResult) return merchantsResult;
+    if (!fallbackData) return null;
+    return merchantsFromSupabase(fallbackData.merchants, fallbackData.orders, listQuery);
+  }, [merchantsResult, fallbackData, listQuery]);
+
+  const isLoading = merchantsLoading || (merchantsApiFailed && fallbackLoading);
+
+  const merchantRows = resolvedResult?.rows ?? [];
+
+  async function handleExport() {
+    try {
+      const csv = await exportMerchantsCsv({
+        data: {
+          search: listQuery.search,
+          status: listQuery.status,
+          businessType: listQuery.businessType,
+          country: listQuery.country,
+          sortBy: listQuery.sortBy,
+          sortDir: listQuery.sortDir,
+        },
+      });
+      downloadTextFile("merchants.csv", csv);
+      return;
+    } catch {
+      if (!merchantRows.length) {
+        toast.error("No merchants to export");
+        return;
+      }
+      exportCsv(
+        "merchants.csv",
+        merchantRows.map((m) => ({
+          store: m.storeName,
+          slug: m.slug,
+          owner_name: m.ownerName,
+          owner_email: m.ownerEmail,
+          type: m.businessType,
+          status: m.status,
+          gmv: m.gmv.toFixed(2),
+          orders: m.orderCount,
+          last_active: m.lastActive,
+          joined: m.joinedAt,
+        })),
+      );
+    }
+  }
+
+  async function handleDelete(merchant: MerchantRow) {
+    if (!confirm(`Remove ${merchant.storeName}? This soft-removes the store.`)) return;
+    try {
+      await removeMerchant({ data: { tenantId: merchant.id, opsActor } });
+      toast.success("Merchant removed");
+      queryClient.invalidateQueries({ queryKey: ["merchants"] });
+      return;
+    } catch {
+      const { error } = await supabase.from("merchants").delete().eq("id", merchant.id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success("Merchant removed");
+      queryClient.invalidateQueries({ queryKey: ["merchants"] });
+      queryClient.invalidateQueries({ queryKey: ["merchants-fallback"] });
+    }
   }
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <PageHeader title="Merchants" subtitle="All registered stores on Seltra" />
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-xl" />
-          ))}
-        </div>
+        <Skeleton className="h-96 w-full rounded-xl" />
       </div>
     );
   }
@@ -77,16 +176,78 @@ function MerchantsPage() {
       <PageHeader
         title="Merchants"
         subtitle="All registered stores on Seltra"
-        action={<Button variant="outline" onClick={() => exportCsv("merchants.csv", merchants as any)}>Export CSV</Button>}
+        action={
+          <Button variant="outline" onClick={handleExport}>
+            Export CSV
+          </Button>
+        }
       />
       <Card>
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap gap-3">
           <Input
-            placeholder="Search by store name…"
+            placeholder="Search store, slug, or owner email…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             className="max-w-sm bg-surface-muted border-input"
           />
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => {
+              setStatusFilter(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="removed">Removed</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Business type"
+            value={businessTypeFilter}
+            onChange={(e) => {
+              setBusinessTypeFilter(e.target.value);
+              setPage(1);
+            }}
+            className="max-w-[160px] bg-surface-muted border-input"
+          />
+          <Input
+            placeholder="Country"
+            value={countryFilter}
+            onChange={(e) => {
+              setCountryFilter(e.target.value);
+              setPage(1);
+            }}
+            className="max-w-[160px] bg-surface-muted border-input"
+          />
+          <Select value={sortBy} onValueChange={(value) => setSortBy(value as MerchantSortBy)}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="joined">Joined</SelectItem>
+              <SelectItem value="gmv">GMV</SelectItem>
+              <SelectItem value="orders">Orders</SelectItem>
+              <SelectItem value="lastActive">Last active</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sortDir} onValueChange={(value) => setSortDir(value as SortDir)}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder="Direction" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Desc</SelectItem>
+              <SelectItem value="asc">Asc</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -95,7 +256,6 @@ function MerchantsPage() {
                 <th className="py-2 pr-4">Store</th>
                 <th className="py-2 pr-4">Owner</th>
                 <th className="py-2 pr-4">Type</th>
-                <th className="py-2 pr-4">Location</th>
                 <th className="py-2 pr-4">Status</th>
                 <th className="py-2 pr-4 text-right">GMV</th>
                 <th className="py-2 pr-4 text-right">Orders</th>
@@ -105,83 +265,160 @@ function MerchantsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredMerchants.map((m: any) => {
-                const stats = gmvByMerchant.get(m.id) ?? { gmv: 0, count: 0 };
-                return (
-                  <tr key={m.id} className="border-b border-border hover:bg-surface-muted/50 cursor-pointer">
-                    <td className="py-3 pr-4">
-                      <div className="font-medium text-sm text-navy">{m.name}</div>
-                      <div className="text-xs text-muted-foreground">{m.slug}</div>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <div className="text-navy">{m.owner_name}</div>
-                      <div className="text-xs text-muted-foreground">{m.owner_email}</div>
-                    </td>
-                    <td className="py-3 pr-4 text-navy">{m.business_type}</td>
-                    <td className="py-3 pr-4 text-muted-foreground">{m.based_in}</td>
-                    <td className="py-3 pr-4"><StatusBadge status={m.status} /></td>
-                    <td className="py-3 pr-4 text-right font-mono text-navy">{formatGHS(stats.gmv)}</td>
-                    <td className="py-3 pr-4 text-right font-mono">{stats.count}</td>
-                    <td className="py-3 pr-4 text-muted-foreground">{timeAgo(m.last_active_at)}</td>
-                    <td className="py-3 pr-4 text-muted-foreground">{shortDate(m.onboarded_at)}</td>
-                    <td className="py-3 pr-4">
-                      <div className="flex items-center gap-2">
-                        <Dialog open={editOpen && selected?.id === m.id} onOpenChange={(v) => { setEditOpen(v); if (!v) setSelected(null); }}>
-                          <DialogTrigger asChild>
-                            <Button size="sm" variant="outline" onClick={() => { setSelected(m); setEditOpen(true); }}>Edit</Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Edit merchant</DialogTitle>
-                              <DialogDescription>Update merchant details</DialogDescription>
-                            </DialogHeader>
-                            <MerchantEditForm merchant={m} onSaved={() => { queryClient.invalidateQueries({ queryKey: ["merchants"] }); setEditOpen(false); setSelected(null); }} />
-                          </DialogContent>
-                        </Dialog>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-destructive border-destructive hover:bg-destructive hover:text-white"
-                          onClick={() => handleDelete(m.id)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {merchantRows.map((m) => (
+                <tr key={m.id} className="border-b border-border hover:bg-surface-muted/50">
+                  <td className="py-3 pr-4">
+                    <div className="font-medium text-sm text-navy">{m.storeName}</div>
+                    <div className="text-xs text-muted-foreground">{m.slug}</div>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <div className="text-navy">{m.ownerName}</div>
+                    <div className="text-xs text-muted-foreground">{m.ownerEmail}</div>
+                  </td>
+                  <td className="py-3 pr-4 text-navy">{m.businessType}</td>
+                  <td className="py-3 pr-4">
+                    <StatusBadge status={m.status} />
+                  </td>
+                  <td className="py-3 pr-4 text-right font-mono text-navy">{formatGHS(m.gmv)}</td>
+                  <td className="py-3 pr-4 text-right font-mono">{m.orderCount}</td>
+                  <td className="py-3 pr-4 text-muted-foreground">{m.lastActive}</td>
+                  <td className="py-3 pr-4 text-muted-foreground">{shortDate(m.joinedAt)}</td>
+                  <td className="py-3 pr-4">
+                    <div className="flex items-center gap-2">
+                      <Dialog
+                        open={editOpen && selected?.id === m.id}
+                        onOpenChange={(open) => {
+                          setEditOpen(open);
+                          if (!open) setSelected(null);
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelected(m);
+                              setEditOpen(true);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Edit merchant</DialogTitle>
+                            <DialogDescription>Update merchant store metadata</DialogDescription>
+                          </DialogHeader>
+                          <MerchantEditForm
+                            merchant={m}
+                            opsActor={opsActor}
+                            onSaved={() => {
+                              queryClient.invalidateQueries({ queryKey: ["merchants"] });
+                              queryClient.invalidateQueries({ queryKey: ["merchants-fallback"] });
+                              setEditOpen(false);
+                              setSelected(null);
+                            }}
+                          />
+                        </DialogContent>
+                      </Dialog>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-destructive border-destructive hover:bg-destructive hover:text-white"
+                        onClick={() => handleDelete(m)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
+        {!merchantRows.length && (
+          <div className="py-8 text-center text-xs text-muted-foreground">No merchants found</div>
+        )}
+        {resolvedResult && resolvedResult.totalPages > 1 && (
+          <div className="mt-4 flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              Page {resolvedResult.page} of {resolvedResult.totalPages} · {resolvedResult.total} merchants
+            </span>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={page >= resolvedResult.totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );
 }
 
-function MerchantEditForm({ merchant, onSaved }: { merchant: any; onSaved?: () => void }) {
-  const [name, setName] = useState(merchant.name || "");
-  const [ownerName, setOwnerName] = useState(merchant.owner_name || "");
-  const [ownerEmail, setOwnerEmail] = useState(merchant.owner_email || "");
-  const [businessType, setBusinessType] = useState(merchant.business_type || "");
-  const [basedIn, setBasedIn] = useState(merchant.based_in || "");
+function MerchantEditForm({
+  merchant,
+  opsActor,
+  onSaved,
+}: {
+  merchant: MerchantRow;
+  opsActor: string;
+  onSaved?: () => void;
+}) {
+  const [name, setName] = useState(merchant.storeName);
+  const [businessType, setBusinessType] = useState(merchant.businessType);
+  const [status, setStatus] = useState(merchant.status);
+  const [basedIn, setBasedIn] = useState(merchant.basedIn === "—" ? "" : merchant.basedIn);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    getMerchantDetail({ data: { tenantId: merchant.id } })
+      .then((response) => setBasedIn(response.data.basedIn ?? ""))
+      .catch(() => undefined);
+  }, [merchant.id]);
 
   async function handleSave(e?: React.FormEvent) {
     e?.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase.from("merchants").update({
-        name,
-        owner_name: ownerName,
-        owner_email: ownerEmail,
-        business_type: businessType,
-        based_in: basedIn,
-      }).eq("id", merchant.id);
-      if (error) throw error;
+      await patchMerchant({
+        data: {
+          tenantId: merchant.id,
+          opsActor,
+          patch: { name, businessType, status, basedIn },
+        },
+      });
+      toast.success("Merchant updated");
       onSaved?.();
-    } catch (err) {
-      console.error(err);
+    } catch {
+      const { error } = await supabase
+        .from("merchants")
+        .update({
+          name,
+          business_type: businessType,
+          status,
+          based_in: basedIn,
+        })
+        .eq("id", merchant.id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success("Merchant updated");
+      onSaved?.();
     } finally {
       setLoading(false);
     }
@@ -194,16 +431,25 @@ function MerchantEditForm({ merchant, onSaved }: { merchant: any; onSaved?: () =
         <Input value={name} onChange={(e) => setName(e.target.value)} required />
       </div>
       <div>
-        <Label>Owner name</Label>
-        <Input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
-      </div>
-      <div>
-        <Label>Owner email</Label>
-        <Input value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} type="email" />
+        <Label>Owner</Label>
+        <Input value={`${merchant.ownerName} · ${merchant.ownerEmail}`} disabled />
       </div>
       <div>
         <Label>Business type</Label>
         <Input value={businessType} onChange={(e) => setBusinessType(e.target.value)} />
+      </div>
+      <div>
+        <Label>Status</Label>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="removed">Removed</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div>
         <Label>Based in</Label>
@@ -213,7 +459,9 @@ function MerchantEditForm({ merchant, onSaved }: { merchant: any; onSaved?: () =
         <DialogClose asChild>
           <Button variant="secondary">Cancel</Button>
         </DialogClose>
-        <Button type="submit" disabled={loading}>{loading ? "Saving..." : "Save"}</Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? "Saving..." : "Save"}
+        </Button>
       </DialogFooter>
     </form>
   );

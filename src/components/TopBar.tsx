@@ -17,7 +17,7 @@ export function TopBar() {
       if (!user?.id) return null;
       const { data } = await supabase
         .from("ops_users")
-        .select("name, role")
+        .select("name")
         .eq("id", user.id)
         .maybeSingle();
       return data;
@@ -35,7 +35,6 @@ export function TopBar() {
   }
 
   const displayName = profile?.name ?? user?.email?.split("@")[0] ?? "User";
-  const role = profile?.role ?? "analyst";
   const { theme, toggle } = useTheme();
 
   return (
@@ -44,7 +43,7 @@ export function TopBar() {
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <button
           type="button"
-          className="hidden shrink-0 md:grid place-items-center rounded-md p-1.5 text-slate-500 transition-colors hover:bg-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+          className="grid shrink-0 place-items-center rounded-md p-1.5 text-slate-500 transition-colors hover:bg-muted hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
           onClick={() => sidebarToggle?.toggleSidebar?.()}
           aria-label="Toggle sidebar"
         >
@@ -90,9 +89,6 @@ export function TopBar() {
             <div className="truncate text-sm font-medium leading-tight text-navy">{displayName}</div>
             <div className="truncate text-[11px] leading-tight text-muted-foreground">{user?.email}</div>
           </div>
-          <span className="hidden lg:inline-flex rounded-full border border-border bg-transparent px-2 py-0.5 text-xs font-medium capitalize text-muted-foreground">
-            {role}
-          </span>
         </div>
 
         <button

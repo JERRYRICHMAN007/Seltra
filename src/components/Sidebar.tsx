@@ -5,6 +5,7 @@ import {
   Users,
   FileText,
   Heart,
+  Megaphone,
   ShoppingCart,
   CreditCard,
   Bot,
@@ -22,6 +23,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
+  SidebarMenuItem,
   SidebarFooter,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
@@ -34,6 +36,7 @@ const groups = [
   {
     label: "Merchants",
     items: [
+      { to: "/merchants/communication", label: "Communication", icon: Megaphone },
       { to: "/merchants", label: "All Merchants", icon: Users },
       { to: "/merchants/applications", label: "Merchant Applications", icon: FileText },
       { to: "/merchants/success", label: "Merchant Success", icon: Heart },
@@ -92,38 +95,42 @@ export function Sidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
 
   return (
-    <UISidebar collapsible="offcanvas">
-      <SidebarHeader className="px-6 py-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary grid place-items-center text-primary-foreground font-bold">S</div>
-          <div>
+    <UISidebar collapsible="icon">
+      <SidebarHeader className="border-b border-sidebar-border px-6 py-4 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3">
+        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary font-bold text-primary-foreground">
+            S
+          </div>
+          <div className="min-w-0 group-data-[collapsible=icon]:hidden">
             <div className="text-sm font-semibold text-white">Seltra Ops</div>
-            <div className="text-[10px] uppercase tracking-wider text-sidebar-muted font-mono">Internal</div>
+            <div className="font-mono text-[10px] uppercase tracking-wider text-sidebar-muted">Internal</div>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="overflow-y-auto gap-0 py-2">
+      <SidebarContent className="gap-0 overflow-y-auto py-2">
         {groups.map((g) => (
           <SidebarGroup key={g.label} className="mb-1 p-0">
-            <SidebarGroupLabel className="px-6 mb-0.5 h-6 text-[10px] font-mono uppercase tracking-widest text-slate-400 dark:text-sidebar-muted">
+            <SidebarGroupLabel className="mb-0.5 h-6 px-6 font-mono text-[10px] uppercase tracking-widest text-slate-400 dark:text-sidebar-muted">
               {g.label}
             </SidebarGroupLabel>
             <SidebarMenu>
               {g.items.map((it) => {
                 const active = isNavActive(path, it.to);
                 return (
-                  <li key={it.to}>
-                    <Link to={it.to} className="block">
-                      <SidebarMenuButton
-                        isActive={active}
-                        className="group mx-2 px-4 h-9 rounded-lg transition-all duration-200 ease-out hover:bg-sidebar-active-bg hover:text-white hover:translate-x-0.5 data-[active=true]:bg-sidebar-active-bg data-[active=true]:text-sidebar-active data-[active=true]:font-medium"
-                      >
+                  <SidebarMenuItem key={it.to}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      tooltip={it.label}
+                      className="group mx-2 h-9 rounded-lg px-4 transition-all duration-200 ease-out hover:translate-x-0.5 hover:bg-sidebar-active-bg hover:text-white data-[active=true]:bg-sidebar-active-bg data-[active=true]:font-medium data-[active=true]:text-sidebar-active group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:translate-x-0 group-data-[collapsible=icon]:px-2"
+                    >
+                      <Link to={it.to}>
                         <it.icon className="h-4 w-4 dark:text-slate-300 dark:group-hover:text-white" />
                         <span>{it.label}</span>
-                      </SidebarMenuButton>
-                    </Link>
-                  </li>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 );
               })}
             </SidebarMenu>
@@ -131,10 +138,10 @@ export function Sidebar() {
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="px-6 py-3 border-t border-sidebar-border">
-        <div className="flex items-center gap-3">
+      <SidebarFooter className="border-t border-sidebar-border px-6 py-3 group-data-[collapsible=icon]:px-2">
+        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
           <SidebarTrigger />
-          <div className="text-xs text-sidebar-muted">Toggle sidebar</div>
+          <div className="text-xs text-sidebar-muted group-data-[collapsible=icon]:hidden">Toggle sidebar</div>
         </div>
       </SidebarFooter>
     </UISidebar>

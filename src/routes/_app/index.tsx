@@ -1,29 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getDashboardActivitySeries, getDashboardFootprint, getDashboardGmvSeries, getDashboardOverview, getDashboardRecentApplications, getDashboardRecentEvents, getDashboardSystemStatus, getDashboardTopMerchants } from "@/lib/api/dashboard.functions";
+import type { DashboardOverview } from "@/lib/api/dashboard.types";
+import { activitySeriesFromEvents, activitySeriesToChartData } from "@/lib/api/dashboard-activity";
+import { gmvSeriesFromOrders, gmvSeriesToChartData } from "@/lib/api/dashboard-gmv";
+import { recentApplicationsFromSupabase } from "@/lib/api/dashboard-recent-applications";
+import { recentEventsFromPlatformEvents, recentEventsToRows } from "@/lib/api/dashboard-recent-events";
+import { systemStatusFromHealth, systemStatusToRows } from "@/lib/api/dashboard-system-status";
+import { topMerchantsFromOrders, topMerchantsToRows } from "@/lib/api/dashboard-top-merchants";
+import { footprintCountriesMap, footprintFromMerchants, footprintToGlobePoints } from "@/lib/api/dashboard-footprint";
 import { PageHeader, MetricCard, StatusBadge, Card } from "@/components/ui-bits";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { formatGHS, formatNumber, formatCompact, timeAgo } from "@/lib/format";
+import { formatGHS, formatNumber, formatCompact } from "@/lib/format";
 import { LineChart, Line, BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useMemo } from "react";
 import type { GlobePoint } from "@/components/GlobeMap";
 import { ClientOnly } from "@/components/client-only";
 
 const GlobeMap = lazy(() => import("@/components/GlobeMap"));
-
-const cityCoords: Record<string, { lat: number; lng: number }> = {
-  "Accra, Ghana": { lat: 5.6037, lng: -0.1870 },
-  "Kumasi, Ghana": { lat: 6.6885, lng: -1.6244 },
-  "Cape Coast, Ghana": { lat: 5.1053, lng: -1.2466 },
-  "Tema, Ghana": { lat: 5.6698, lng: -0.0166 },
-  "Tamale, Ghana": { lat: 9.4035, lng: -0.8423 },
-  "Ho, Ghana": { lat: 6.6119, lng: 0.4703 },
-  "Ghana": { lat: 7.9465, lng: -1.0232 },
-  "Lagos, Nigeria": { lat: 6.5244, lng: 3.3792 },
-  "Nairobi, Kenya": { lat: -1.2921, lng: 36.8219 },
-  "Johannesburg, South Africa": { lat: -26.2041, lng: 28.0473 },
-};
 
 export const Route = createFileRoute("/_app/")({
   head: () => ({ meta: [{ title: "Dashboard — Seltra Ops" }] }),
@@ -31,15 +27,79 @@ export const Route = createFileRoute("/_app/")({
 });
 
 function DashboardPage() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["dashboard"],
+  const { data: overview, isLoading: overviewLoading, isError: overviewApiFailed } = useQuery({
+    queryKey: ["dashboard-overview"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
+    retry: false,
+    queryFn: () => getDashboardOverview(),
+  });
+
+  const { data: footprint, isLoading: footprintLoading, isError: footprintApiFailed } = useQuery({
+    queryKey: ["dashboard-footprint"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
+    retry: false,
+    queryFn: () => getDashboardFootprint(),
+  });
+
+  const { data: gmvSeries, isLoading: gmvSeriesLoading, isError: gmvSeriesApiFailed } = useQuery({
+    queryKey: ["dashboard-gmv-series"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
+    retry: false,
+    queryFn: () => getDashboardGmvSeries(),
+  });
+
+  const { data: activitySeries, isLoading: activitySeriesLoading, isError: activitySeriesApiFailed } = useQuery({
+    queryKey: ["dashboard-activity-series"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
+    retry: false,
+    queryFn: () => getDashboardActivitySeries(),
+  });
+
+  const { data: topMerchantsResponse, isLoading: topMerchantsLoading, isError: topMerchantsApiFailed } = useQuery({
+    queryKey: ["dashboard-top-merchants"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
+    retry: false,
+    queryFn: () => getDashboardTopMerchants(),
+  });
+
+  const { data: recentEvents, isLoading: recentEventsLoading, isError: recentEventsApiFailed } = useQuery({
+    queryKey: ["dashboard-recent-events"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
+    retry: false,
+    queryFn: () => getDashboardRecentEvents(),
+  });
+
+  const { data: systemStatus, isLoading: systemStatusLoading, isError: systemStatusApiFailed } = useQuery({
+    queryKey: ["dashboard-system-status"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
+    retry: false,
+    queryFn: () => getDashboardSystemStatus(),
+  });
+
+  const { data: recentApplications, isLoading: recentApplicationsLoading, isError: recentApplicationsApiFailed } = useQuery({
+    queryKey: ["dashboard-recent-applications"],
+    staleTime: 1000 * 60 * 2,
+    gcTime: 1000 * 60 * 5,
+    retry: false,
+    queryFn: () => getDashboardRecentApplications(),
+  });
+
+  const { data, isLoading: detailsLoading } = useQuery({
+    queryKey: ["dashboard-details"],
     staleTime: 1000 * 60 * 2,
     gcTime: 1000 * 60 * 5,
     queryFn: async () => {
       const [merchants, orders, agents, events, health, apps] = await Promise.all([
         supabase.from("merchants").select("id,name,slug,status,last_active_at,based_in"),
         supabase.from("orders").select("id,merchant_id,total_amount,status,created_at").order("created_at", { ascending: false }),
-        supabase.from("agent_invocations").select("id,created_at,success"),
+        supabase.from("agent_invocations").select("id,created_at"),
         supabase.from("platform_events").select("id,event_type,merchant_id,created_at").order("created_at", { ascending: false }).limit(20),
         supabase.from("system_health").select("service,status,checked_at").order("checked_at", { ascending: false }).limit(50),
         supabase.from("merchant_applications").select("*").order("created_at", { ascending: false }),
@@ -55,103 +115,105 @@ function DashboardPage() {
     },
   });
 
-  const [liveEvents, setLiveEvents] = useState<any[]>([]);
-  useEffect(() => { setLiveEvents(data?.events ?? []); }, [data?.events]);
-  useEffect(() => {
-    try {
-      const ch = supabase
-        .channel("dash-events")
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "platform_events" }, (p) => {
-          setLiveEvents((prev) => [p.new as any, ...prev].slice(0, 20));
-        })
-        .subscribe();
-      return () => {
-        supabase.removeChannel(ch);
-      };
-    } catch (error) {
-      console.error("[dashboard] Realtime unavailable:", error);
-      return undefined;
-    }
-  }, []);
+  const isLoading = overviewLoading || detailsLoading;
 
   const merchantsById = new Map((data?.merchants ?? []).map((m) => [m.id, m]));
-  const activeMerchants = (data?.merchants ?? []).filter((m) => m.status === "active").length;
   const paidOrders = (data?.orders ?? []).filter((o) => o.status === "paid");
-  const monthGmv = paidOrders.filter((o) => new Date(o.created_at).getTime() > Date.now() - 30 * 86400 * 1000)
-    .reduce((s, o) => s + Number(o.total_amount), 0);
-  const todayAgents = (data?.agents ?? []).filter((a) => new Date(a.created_at).getTime() > Date.now() - 86400 * 1000).length;
-  const waitlistApplicants = (data?.apps ?? []).filter((a) => !a.merchant_id).length;
-  const readyToOnboard = (data?.apps ?? []).filter((a) => a.status === "approved" && !a.merchant_id).length;
-  const merchantSuccessCount = (data?.apps ?? []).filter((a) => Boolean(a.merchant_id)).length;
+  const paidOrders30d = paidOrders.filter(
+    (o) => new Date(o.created_at).getTime() > Date.now() - 30 * 86400000,
+  );
+  const monthGmv = paidOrders30d.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
-  // GMV by day
-  const gmvDays = Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (29 - i)); d.setHours(0, 0, 0, 0);
-    const next = d.getTime() + 86400 * 1000;
-    const total = paidOrders.filter((o) => { const t = new Date(o.created_at).getTime(); return t >= d.getTime() && t < next; })
-      .reduce((s, o) => s + Number(o.total_amount), 0);
-    return { day: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), gmv: Math.round(total) };
-  });
+  const fallbackOverview = useMemo((): DashboardOverview | null => {
+    if (!data) return null;
+    const merchants = data.merchants;
+    const apps = data.apps;
+    return {
+      totalMerchantsStores: merchants.length,
+      activeMerchantsStores: merchants.filter((m) => m.status === "active").length,
+      gmv30d: { amount: monthGmv.toFixed(2), currency: "GHS" },
+      paidOrders30d: paidOrders30d.length,
+      waitlistApplicants: apps.filter((a) => !a.merchant_id).length,
+      approvedToOnboard: apps.filter((a) => a.status === "approved" && !a.merchant_id).length,
+      merchantSuccess: apps.filter((a) => Boolean(a.merchant_id)).length,
+      aiInvocations24h: (data.agents ?? []).filter(
+        (a) => new Date(a.created_at).getTime() > Date.now() - 86400000,
+      ).length,
+    };
+  }, [data, monthGmv, paidOrders30d.length]);
 
-  const signupsByDay = Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (29 - i)); d.setHours(0, 0, 0, 0);
-    const next = d.getTime() + 86400 * 1000;
-    const count = (data?.merchants ?? []).filter((m: any) => {
-      const t = new Date(m.last_active_at).getTime();
-      return t >= d.getTime() && t < next;
-    }).length;
-    return { day: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), n: count };
-  });
+  const metrics = overview ?? fallbackOverview;
+  const metricsUnavailable = !metrics && overviewApiFailed && !detailsLoading;
 
-  // Top merchants by GMV
-  const gmvByMerchant = new Map<string, number>();
-  paidOrders.forEach((o) => gmvByMerchant.set(o.merchant_id!, (gmvByMerchant.get(o.merchant_id!) ?? 0) + Number(o.total_amount)));
-  const topMerchants = Array.from(gmvByMerchant.entries())
-    .sort((a, b) => b[1] - a[1]).slice(0, 5)
-    .map(([id, gmv]) => ({ ...(merchantsById.get(id) as any), gmv }));
-
-  // System status: latest per service
-  const latestHealth = new Map<string, any>();
-  (data?.health ?? []).forEach((h) => { if (!latestHealth.has(h.service)) latestHealth.set(h.service, h); });
-
-  const globeData = useMemo(() => {
-    const merchants = data?.merchants ?? [];
-    const grouped = merchants.reduce<Record<string, typeof merchants>>((acc, m) => {
-      const location = m.based_in || "Unknown";
-      if (!acc[location]) acc[location] = [];
-      acc[location].push(m);
-      return acc;
-    }, {});
-
-    return Object.entries(grouped)
-      .map(([location, list]) => {
-        const coords = cityCoords[location];
-        if (!coords) return null;
-        const country = location.includes(",") ? location.split(",").pop()!.trim() : location;
-        return {
-          lat: coords.lat,
-          lng: coords.lng,
-          label: location,
-          count: list.length,
-          country,
-        };
-      })
-      .filter(Boolean);
-  }, [data?.merchants]);
-
-  const merchants = data?.merchants ?? [];
-  const merchantsByCountry = useMemo(() => {
-    const acc: Record<string, number> = {};
-    for (const m of merchants) {
-      const basedIn = m.based_in || "";
-      const country = basedIn.includes(",") ? basedIn.split(",").pop()!.trim() : basedIn;
-      if (!country) continue;
-      acc[country] = (acc[country] || 0) + 1;
+  const resolvedFootprint = useMemo(() => {
+    if (footprint) return footprint;
+    // Only fall back after the footprint API has failed — map is powered by /dashboard/footprint
+    if (footprintApiFailed && data?.merchants.length) {
+      return footprintFromMerchants(data.merchants);
     }
-    return acc;
-  }, [merchants]);
+    return null;
+  }, [footprint, footprintApiFailed, data?.merchants]);
 
-  const topCountry = Object.entries(merchantsByCountry).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+  const footprintFromApi = Boolean(footprint);
+
+  const gmvDays = useMemo(() => {
+    if (gmvSeries?.length) return gmvSeriesToChartData(gmvSeries);
+    if (paidOrders.length) return gmvSeriesFromOrders(paidOrders);
+    return [];
+  }, [gmvSeries, paidOrders]);
+
+  const activityByDay = useMemo(() => {
+    if (activitySeries?.length) return activitySeriesToChartData(activitySeries);
+    if (data?.events.length) return activitySeriesFromEvents(data.events);
+    return [];
+  }, [activitySeries, data?.events]);
+
+  const topMerchants = useMemo(() => {
+    if (topMerchantsResponse?.data.length) return topMerchantsToRows(topMerchantsResponse);
+    if (paidOrders.length) return topMerchantsFromOrders(paidOrders, merchantsById);
+    return [];
+  }, [topMerchantsResponse, paidOrders, merchantsById]);
+
+  const topMerchantsTitle = topMerchantsResponse?.fallback
+    ? "Top merchants by GMV · all-time"
+    : topMerchantsResponse?.period
+      ? `Top merchants by GMV · ${topMerchantsResponse.period}`
+      : "Top merchants by GMV";
+
+  const recentEventRows = useMemo(() => {
+    if (recentEvents?.length) return recentEventsToRows(recentEvents);
+    if (data?.events.length) return recentEventsFromPlatformEvents(data.events);
+    return [];
+  }, [recentEvents, data?.events]);
+
+  const systemStatusRows = useMemo(() => {
+    if (systemStatus) return systemStatusToRows(systemStatus);
+    if (data?.health.length) return systemStatusFromHealth(data.health);
+    return [];
+  }, [systemStatus, data?.health]);
+
+  const applicationRows = useMemo(() => {
+    if (recentApplications?.length) return recentApplications;
+    if (data?.apps.length) return recentApplicationsFromSupabase(data.apps);
+    return [];
+  }, [recentApplications, data?.apps]);
+
+  const globeData = useMemo(
+    () => (resolvedFootprint ? footprintToGlobePoints(resolvedFootprint) : []),
+    [resolvedFootprint],
+  );
+
+  const merchantsByCountry = useMemo(
+    () => (resolvedFootprint ? footprintCountriesMap(resolvedFootprint) : {}),
+    [resolvedFootprint],
+  );
+
+  const footprintStats = {
+    totalMerchants: resolvedFootprint?.totalMerchants ?? 0,
+    activeMerchants: resolvedFootprint?.activeMerchants ?? 0,
+    countryCount: resolvedFootprint?.countries.length ?? 0,
+    topMarket: resolvedFootprint?.topMarket ?? "—",
+  };
 
   if (isLoading) {
     return (
@@ -172,12 +234,52 @@ function DashboardPage() {
 
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-3 gap-4">
-          <MetricCard label="Total Merchants" value={formatNumber(activeMerchants)} delta="↑ active" />
-          <MetricCard label="GMV (30d)" value={formatGHS(monthGmv)} delta={`${paidOrders.length} paid orders`} />
-          <MetricCard label="Waitlist applicants" value={formatCompact(waitlistApplicants)} delta="seen by Ops" />
-          <MetricCard label="Approved to onboard" value={formatCompact(readyToOnboard)} delta="ready for launch" />
-          <MetricCard label="Merchant success" value={formatCompact(merchantSuccessCount)} delta="onboarded" />
-          <MetricCard label="AI Invocations (24h)" value={formatCompact(todayAgents)} delta="across all merchants" />
+          <MetricCard
+            label="Total Merchants Stores"
+            value={metrics ? formatNumber(metrics.totalMerchantsStores) : "—"}
+            delta={
+              metrics
+                ? `${formatCompact(metrics.activeMerchantsStores)} active`
+                : metricsUnavailable
+                  ? "unavailable"
+                  : overviewLoading
+                    ? "loading…"
+                    : "—"
+            }
+          />
+          <MetricCard
+            label="GMV (30d)"
+            value={metrics ? formatGHS(Number(metrics.gmv30d.amount)) : "—"}
+            delta={
+              metrics
+                ? `${formatCompact(metrics.paidOrders30d)} paid orders`
+                : metricsUnavailable
+                  ? "unavailable"
+                  : overviewLoading
+                    ? "loading…"
+                    : "—"
+            }
+          />
+          <MetricCard
+            label="Waitlist applicants"
+            value={metrics ? formatCompact(metrics.waitlistApplicants) : "—"}
+            delta={metrics ? "seen by Ops" : metricsUnavailable ? "unavailable" : overviewLoading ? "loading…" : "—"}
+          />
+          <MetricCard
+            label="Approved to onboard"
+            value={metrics ? formatCompact(metrics.approvedToOnboard) : "—"}
+            delta={metrics ? "ready for launch" : metricsUnavailable ? "unavailable" : overviewLoading ? "loading…" : "—"}
+          />
+          <MetricCard
+            label="Merchant success"
+            value={metrics ? formatCompact(metrics.merchantSuccess) : "—"}
+            delta={metrics ? "onboarded" : metricsUnavailable ? "unavailable" : overviewLoading ? "loading…" : "—"}
+          />
+          <MetricCard
+            label="AI Invocations (24h)"
+            value={metrics ? formatCompact(metrics.aiInvocations24h) : "—"}
+            delta={metrics ? "across all merchants" : metricsUnavailable ? "unavailable" : overviewLoading ? "loading…" : "—"}
+          />
         </div>
 
         <div
@@ -195,20 +297,28 @@ function DashboardPage() {
             <div>
               <div className="text-2xl font-semibold text-white">Global merchant footprint</div>
               <div className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.5)" }}>
-                {merchants.length} merchants across {Object.keys(merchantsByCountry).length} countries
+                {footprintLoading && !resolvedFootprint
+                  ? "Loading footprint from Seltra API…"
+                  : footprintFromApi
+                    ? `${footprintStats.totalMerchants} merchants across ${footprintStats.countryCount} countries`
+                    : footprintApiFailed && resolvedFootprint
+                      ? `${footprintStats.totalMerchants} merchants across ${footprintStats.countryCount} countries`
+                      : footprintApiFailed
+                        ? "Footprint API unavailable — start Seltra backend on :3001"
+                        : "No footprint data yet"}
               </div>
             </div>
             <div className="flex gap-6 text-right">
               <div>
-                <div className="text-xl font-semibold text-white">{merchants.filter((m) => m.status === "active").length}</div>
+                <div className="text-xl font-semibold text-white">{formatCompact(footprintStats.activeMerchants)}</div>
                 <div className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>Active</div>
               </div>
               <div>
-                <div className="text-xl font-semibold" style={{ color: "#1D9E75" }}>{Object.keys(merchantsByCountry).length}</div>
+                <div className="text-xl font-semibold" style={{ color: "#1D9E75" }}>{footprintStats.countryCount}</div>
                 <div className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>Countries</div>
               </div>
               <div>
-                <div className="text-xl font-semibold text-white">{topCountry}</div>
+                <div className="text-xl font-semibold text-white">{footprintStats.topMarket}</div>
                 <div className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>Top market</div>
               </div>
             </div>
@@ -216,7 +326,11 @@ function DashboardPage() {
 
           <ClientOnly fallback={<div className="px-6"><Skeleton className="h-64 w-full rounded-xl" /></div>}>
             <Suspense fallback={<div className="px-6"><Skeleton className="h-64 w-full rounded-xl" /></div>}>
-              <GlobeMap points={globeData as GlobePoint[]} />
+              {footprintLoading && !resolvedFootprint ? (
+                <div className="px-6 pb-4"><Skeleton className="h-64 w-full rounded-xl" /></div>
+              ) : (
+                <GlobeMap points={globeData as GlobePoint[]} />
+              )}
             </Suspense>
           </ClientOnly>
 
@@ -250,8 +364,11 @@ function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card title="GMV — last 30 days">
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={gmvDays}>
+            {gmvSeriesLoading && !gmvDays.length ? (
+              <Skeleton className="h-full w-full rounded-lg" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={gmvDays}>
                 <defs>
                   <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.3} />
@@ -265,89 +382,120 @@ function DashboardPage() {
                 <Area type="monotone" dataKey="gmv" stroke="var(--color-primary)" strokeWidth={2} fill="url(#g1)" />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         </Card>
         <Card title="New activity — last 30 days">
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={signupsByDay}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="day" tick={{ fontSize: 11 }} interval={4} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="n" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {activitySeriesLoading && !activityByDay.length ? (
+              <Skeleton className="h-full w-full rounded-lg" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={activityByDay}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="day" tick={{ fontSize: 11 }} interval={4} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="n" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card title="Top merchants by GMV" className="lg:col-span-1">
+        <Card title={topMerchantsTitle} className="lg:col-span-1">
           <div className="space-y-2">
-            {topMerchants.map((m, i) => (
-              <div key={m.id} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-3">
-                  <div className="h-6 w-6 rounded bg-primary-soft text-primary grid place-items-center text-xs font-mono">{i + 1}</div>
-                  <div>
-                    <div className="font-medium text-navy">{m.name}</div>
-                    <div className="text-xs text-muted-foreground font-mono">{m.slug}</div>
+            {topMerchantsLoading && !topMerchants.length ? (
+              <Skeleton className="h-32 w-full rounded-lg" />
+            ) : (
+              topMerchants.map((m) => (
+                <div key={m.id} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="h-6 w-6 rounded bg-primary-soft text-primary grid place-items-center text-xs font-mono">{m.rank}</div>
+                    <div>
+                      <div className="font-medium text-navy">{m.name}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{m.slug}</div>
+                    </div>
                   </div>
+                  <div className="font-mono text-navy">{formatGHS(m.gmv)}</div>
                 </div>
-                <div className="font-mono text-navy">{formatGHS(m.gmv)}</div>
-              </div>
-            ))}
+              ))
+            )}
+            {!topMerchantsLoading && !topMerchants.length && (
+              <div className="text-xs text-muted-foreground">No merchant GMV data yet</div>
+            )}
           </div>
         </Card>
 
-        <Card title="Recent events (live)" className="lg:col-span-1">
+        <Card title="Recent events" className="lg:col-span-1">
           <div className="space-y-2 max-h-64 overflow-y-auto">
-            {liveEvents.slice(0, 10).map((e) => (
-              <div key={e.id} className="text-xs flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                <span className="font-mono text-navy">{e.event_type}</span>
-                <span className="text-muted-foreground ml-auto">{timeAgo(e.created_at)}</span>
-              </div>
-            ))}
-            {!liveEvents.length && <div className="text-xs text-muted-foreground">No events yet</div>}
+            {recentEventsLoading && !recentEventRows.length ? (
+              <Skeleton className="h-32 w-full rounded-lg" />
+            ) : (
+              recentEventRows.slice(0, 10).map((e) => (
+                <div key={e.id} className="text-xs flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                  <span className="font-mono text-navy">{e.type}</span>
+                  <span className="text-muted-foreground ml-auto">{e.timeLabel}</span>
+                </div>
+              ))
+            )}
+            {!recentEventsLoading && !recentEventRows.length && (
+              <div className="text-xs text-muted-foreground">No events yet</div>
+            )}
           </div>
         </Card>
 
         <Card title="System status">
           <div className="space-y-3">
-            {["api", "agent", "storefront", "payments", "db"].map((s) => {
-              const h = latestHealth.get(s);
-              const status = h?.status ?? "unknown";
-              const color = status === "healthy" ? "bg-primary" : status === "degraded" ? "bg-warning" : "bg-destructive";
-              return (
-                <div key={s} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${color}`} />
-                    <span className="font-mono uppercase text-xs text-navy">{s}</span>
+            {systemStatusLoading && !systemStatusRows.length ? (
+              <Skeleton className="h-32 w-full rounded-lg" />
+            ) : (
+              systemStatusRows.map(({ key, status }) => {
+                const color = status === "healthy" ? "bg-primary" : status === "degraded" ? "bg-warning" : "bg-destructive";
+                return (
+                  <div key={key} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${color}`} />
+                      <span className="font-mono uppercase text-xs text-navy">{key}</span>
+                    </div>
+                    <StatusBadge status={status} />
                   </div>
-                  <StatusBadge status={status} />
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </Card>
       </div>
 
-      <Card title="Recent applications" action={<Button size="sm" variant="ghost">View all</Button>}>
+      <Card
+        title="Recent applications"
+        action={<Button size="sm" variant="ghost">View all</Button>}
+      >
         <div className="space-y-2">
-          {(data?.apps ?? []).map((a) => (
-            <div key={a.id} className="flex items-center justify-between text-sm py-2 border-b border-border last:border-0">
-              <div>
-                <div className="font-medium text-navy">{a.full_name} <span className="text-muted-foreground font-normal">— {a.business_name}</span></div>
-                <div className="text-xs text-muted-foreground">{a.what_you_sell}</div>
+          {recentApplicationsLoading && !applicationRows.length ? (
+            <Skeleton className="h-32 w-full rounded-lg" />
+          ) : (
+            applicationRows.map((a) => (
+              <div key={a.id} className="flex items-center justify-between text-sm py-2 border-b border-border last:border-0">
+                <div>
+                  <div className="font-medium text-navy">
+                    {a.fullName} <span className="text-muted-foreground font-normal">— {a.businessName}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">{a.storeName}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={a.status} />
+                  <Button size="sm" variant="outline">Review</Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <StatusBadge status={a.status} />
-                <Button size="sm" variant="outline">Review</Button>
-              </div>
-            </div>
-          ))}
-          {!(data?.apps ?? []).length && <div className="text-xs text-muted-foreground">No pending applications</div>}
+            ))
+          )}
+          {!recentApplicationsLoading && !applicationRows.length && (
+            <div className="text-xs text-muted-foreground">No pending applications</div>
+          )}
         </div>
       </Card>
     </div>

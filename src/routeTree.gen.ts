@@ -25,6 +25,7 @@ import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings.ind
 import { Route as AppMerchantsIndexRouteImport } from './routes/_app/merchants.index'
 import { Route as AppSettingsTeamRouteImport } from './routes/_app/settings.team'
 import { Route as AppMerchantsSuccessRouteImport } from './routes/_app/merchants.success'
+import { Route as AppMerchantsCommunicationRouteImport } from './routes/_app/merchants.communication'
 import { Route as AppMerchantsApplicationsRouteImport } from './routes/_app/merchants.applications'
 
 const LoginRoute = LoginRouteImport.update({
@@ -106,6 +107,12 @@ const AppMerchantsSuccessRoute = AppMerchantsSuccessRouteImport.update({
   path: '/success',
   getParentRoute: () => AppMerchantsRoute,
 } as any)
+const AppMerchantsCommunicationRoute =
+  AppMerchantsCommunicationRouteImport.update({
+    id: '/communication',
+    path: '/communication',
+    getParentRoute: () => AppMerchantsRoute,
+  } as any)
 const AppMerchantsApplicationsRoute =
   AppMerchantsApplicationsRouteImport.update({
     id: '/applications',
@@ -126,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/retention': typeof AppRetentionRoute
   '/system': typeof AppSystemRoute
   '/merchants/applications': typeof AppMerchantsApplicationsRoute
+  '/merchants/communication': typeof AppMerchantsCommunicationRoute
   '/merchants/success': typeof AppMerchantsSuccessRoute
   '/settings/team': typeof AppSettingsTeamRoute
   '/merchants/': typeof AppMerchantsIndexRoute
@@ -143,6 +151,7 @@ export interface FileRoutesByTo {
   '/system': typeof AppSystemRoute
   '/': typeof AppIndexRoute
   '/merchants/applications': typeof AppMerchantsApplicationsRoute
+  '/merchants/communication': typeof AppMerchantsCommunicationRoute
   '/merchants/success': typeof AppMerchantsSuccessRoute
   '/settings/team': typeof AppSettingsTeamRoute
   '/merchants': typeof AppMerchantsIndexRoute
@@ -163,6 +172,7 @@ export interface FileRoutesById {
   '/_app/system': typeof AppSystemRoute
   '/_app/': typeof AppIndexRoute
   '/_app/merchants/applications': typeof AppMerchantsApplicationsRoute
+  '/_app/merchants/communication': typeof AppMerchantsCommunicationRoute
   '/_app/merchants/success': typeof AppMerchantsSuccessRoute
   '/_app/settings/team': typeof AppSettingsTeamRoute
   '/_app/merchants/': typeof AppMerchantsIndexRoute
@@ -183,6 +193,7 @@ export interface FileRouteTypes {
     | '/retention'
     | '/system'
     | '/merchants/applications'
+    | '/merchants/communication'
     | '/merchants/success'
     | '/settings/team'
     | '/merchants/'
@@ -200,6 +211,7 @@ export interface FileRouteTypes {
     | '/system'
     | '/'
     | '/merchants/applications'
+    | '/merchants/communication'
     | '/merchants/success'
     | '/settings/team'
     | '/merchants'
@@ -219,6 +231,7 @@ export interface FileRouteTypes {
     | '/_app/system'
     | '/_app/'
     | '/_app/merchants/applications'
+    | '/_app/merchants/communication'
     | '/_app/merchants/success'
     | '/_app/settings/team'
     | '/_app/merchants/'
@@ -344,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMerchantsSuccessRouteImport
       parentRoute: typeof AppMerchantsRoute
     }
+    '/_app/merchants/communication': {
+      id: '/_app/merchants/communication'
+      path: '/communication'
+      fullPath: '/merchants/communication'
+      preLoaderRoute: typeof AppMerchantsCommunicationRouteImport
+      parentRoute: typeof AppMerchantsRoute
+    }
     '/_app/merchants/applications': {
       id: '/_app/merchants/applications'
       path: '/applications'
@@ -356,12 +376,14 @@ declare module '@tanstack/react-router' {
 
 interface AppMerchantsRouteChildren {
   AppMerchantsApplicationsRoute: typeof AppMerchantsApplicationsRoute
+  AppMerchantsCommunicationRoute: typeof AppMerchantsCommunicationRoute
   AppMerchantsSuccessRoute: typeof AppMerchantsSuccessRoute
   AppMerchantsIndexRoute: typeof AppMerchantsIndexRoute
 }
 
 const AppMerchantsRouteChildren: AppMerchantsRouteChildren = {
   AppMerchantsApplicationsRoute: AppMerchantsApplicationsRoute,
+  AppMerchantsCommunicationRoute: AppMerchantsCommunicationRoute,
   AppMerchantsSuccessRoute: AppMerchantsSuccessRoute,
   AppMerchantsIndexRoute: AppMerchantsIndexRoute,
 }

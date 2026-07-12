@@ -206,8 +206,9 @@ function DashboardPage() {
           <div className="font-medium text-navy">Overview metrics unavailable</div>
           <p className="mt-1 text-muted-foreground">
             Could not reach <span className="font-mono text-xs">GET /internal/ops/dashboard/overview</span>.
-            Ensure the Seltra backend is running and <span className="font-mono text-xs">SELTRA_API_BASE_URL</span> /{" "}
-            <span className="font-mono text-xs">SELTRA_INTERNAL_API_KEY</span> are set.
+            On Vercel, set <span className="font-mono text-xs">SELTRA_API_BASE_URL</span> and{" "}
+            <span className="font-mono text-xs">SELTRA_INTERNAL_API_KEY</span> under Project Settings →
+            Environment Variables (Production), then redeploy.
           </p>
           <p className="mt-1 font-mono text-xs text-muted-foreground break-all">{overviewErrorMessage}</p>
           <Button size="sm" variant="outline" className="mt-3" onClick={() => void refetchOverview()}>

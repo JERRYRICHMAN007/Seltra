@@ -12,6 +12,9 @@ import type {
 } from "./dashboard.types";
 import { normalizeFootprintPayload } from "./dashboard-footprint";
 import { normalizeDashboardOverview } from "./dashboard-overview";
+import { normalizeRecentEventsPayload } from "./dashboard-recent-events-normalize";
+import { normalizeSystemStatusPayload } from "./dashboard-system-status-normalize";
+import { normalizeTopMerchantsPayload } from "./dashboard-top-merchants-normalize";
 import { seltraInternalFetch } from "./seltra-api.server";
 
 export const getDashboardOverview = createServerFn({ method: "GET" }).handler(
@@ -47,18 +50,36 @@ export const getDashboardActivitySeries = createServerFn({ method: "GET" }).hand
 );
 
 export const getDashboardTopMerchants = createServerFn({ method: "GET" }).handler(
-  async (): Promise<DashboardTopMerchantsResponse> =>
-    seltraInternalFetch<DashboardTopMerchantsResponse>("/internal/ops/dashboard/top-merchants?days=30"),
+  async (): Promise<DashboardTopMerchantsResponse> => {
+    const payload = await seltraInternalFetch<unknown>("/internal/ops/dashboard/top-merchants?days=30");
+    const response = normalizeTopMerchantsPayload(payload);
+    if (!response) {
+      throw new Error("Invalid top-merchants payload from Seltra API");
+    }
+    return response;
+  },
 );
 
 export const getDashboardRecentEvents = createServerFn({ method: "GET" }).handler(
-  async (): Promise<DashboardRecentEvent[]> =>
-    seltraInternalFetch<DashboardRecentEvent[]>("/internal/ops/dashboard/recent-events"),
+  async (): Promise<DashboardRecentEvent[]> => {
+    const payload = await seltraInternalFetch<unknown>("/internal/ops/dashboard/recent-events");
+    const events = normalizeRecentEventsPayload(payload);
+    if (!events) {
+      throw new Error("Invalid recent-events payload from Seltra API");
+    }
+    return events;
+  },
 );
 
 export const getDashboardSystemStatus = createServerFn({ method: "GET" }).handler(
-  async (): Promise<DashboardSystemStatus> =>
-    seltraInternalFetch<DashboardSystemStatus>("/internal/ops/dashboard/system-status"),
+  async (): Promise<DashboardSystemStatus> => {
+    const payload = await seltraInternalFetch<unknown>("/internal/ops/dashboard/system-status");
+    const status = normalizeSystemStatusPayload(payload);
+    if (!status) {
+      throw new Error("Invalid system-status payload from Seltra API");
+    }
+    return status;
+  },
 );
 
 export const getDashboardRecentApplications = createServerFn({ method: "GET" }).handler(

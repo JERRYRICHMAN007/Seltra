@@ -5,9 +5,9 @@ import { getDashboardActivitySeries, getDashboardFootprint, getDashboardGmvSerie
 import { activitySeriesFromEvents, activitySeriesToChartData } from "@/lib/api/dashboard-activity";
 import { gmvSeriesFromOrders, gmvSeriesToChartData } from "@/lib/api/dashboard-gmv";
 import { recentApplicationsFromSupabase } from "@/lib/api/dashboard-recent-applications";
-import { recentEventsFromPlatformEvents, recentEventsToRows } from "@/lib/api/dashboard-recent-events";
-import { systemStatusFromHealth, systemStatusToRows } from "@/lib/api/dashboard-system-status";
-import { topMerchantsFromOrders, topMerchantsToRows } from "@/lib/api/dashboard-top-merchants";
+import { recentEventsToRows } from "@/lib/api/dashboard-recent-events";
+import { systemStatusToRows } from "@/lib/api/dashboard-system-status";
+import { topMerchantsToRows } from "@/lib/api/dashboard-top-merchants";
 import { footprintCountriesMap, footprintFromMerchants, footprintToGlobePoints } from "@/lib/api/dashboard-footprint";
 import { PageHeader, MetricCard, StatusBadge, Card } from "@/components/ui-bits";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,7 +48,7 @@ function DashboardPage() {
     queryFn: () => getDashboardFootprint(),
   });
 
-  const { data: gmvSeries, isLoading: gmvSeriesLoading, isError: gmvSeriesApiFailed } = useQuery({
+  const { data: gmvSeries, isLoading: gmvSeriesLoading } = useQuery({
     queryKey: ["dashboard-gmv-series"],
     staleTime: 1000 * 60 * 2,
     gcTime: 1000 * 60 * 5,
@@ -56,7 +56,7 @@ function DashboardPage() {
     queryFn: () => getDashboardGmvSeries(),
   });
 
-  const { data: activitySeries, isLoading: activitySeriesLoading, isError: activitySeriesApiFailed } = useQuery({
+  const { data: activitySeries, isLoading: activitySeriesLoading } = useQuery({
     queryKey: ["dashboard-activity-series"],
     staleTime: 1000 * 60 * 2,
     gcTime: 1000 * 60 * 5,
@@ -101,24 +101,21 @@ function DashboardPage() {
     staleTime: 1000 * 60 * 2,
     gcTime: 1000 * 60 * 5,
     queryFn: async () => {
-      const [merchants, orders, events, health, apps] = await Promise.all([
+      const [merchants, orders, events, apps] = await Promise.all([
         supabase.from("merchants").select("id,name,slug,status,last_active_at,based_in"),
         supabase.from("orders").select("id,merchant_id,total_amount,status,created_at").order("created_at", { ascending: false }),
         supabase.from("platform_events").select("id,event_type,merchant_id,created_at").order("created_at", { ascending: false }).limit(20),
-        supabase.from("system_health").select("service,status,checked_at").order("checked_at", { ascending: false }).limit(50),
         supabase.from("merchant_applications").select("*").order("created_at", { ascending: false }),
       ]);
       return {
         merchants: merchants.data ?? [],
         orders: orders.data ?? [],
         events: events.data ?? [],
-        health: health.data ?? [],
         apps: apps.data ?? [],
       };
     },
   });
 
-  const merchantsById = new Map((data?.merchants ?? []).map((m) => [m.id, m]));
   const paidOrders = (data?.orders ?? []).filter((o) => o.status === "paid");
 
   // Overview metric cards are API-only — no Supabase fallback (backend is source of truth).
@@ -150,29 +147,27 @@ function DashboardPage() {
     return [];
   }, [activitySeries, data?.events]);
 
-  const topMerchants = useMemo(() => {
-    if (topMerchantsResponse?.data.length) return topMerchantsToRows(topMerchantsResponse);
-    if (paidOrders.length) return topMerchantsFromOrders(paidOrders, merchantsById);
-    return [];
-  }, [topMerchantsResponse, paidOrders, merchantsById]);
+  // These three panels are API-only — never show Ops Supabase seed/demo rows.
+  const topMerchants = useMemo(
+    () => (topMerchantsResponse?.data.length ? topMerchantsToRows(topMerchantsResponse) : []),
+    [topMerchantsResponse],
+  );
 
   const topMerchantsTitle = topMerchantsResponse?.fallback
     ? "Top merchants by GMV · all-time"
     : topMerchantsResponse?.period
       ? `Top merchants by GMV · ${topMerchantsResponse.period}`
-      : "Top merchants by GMV";
+      : "Top merchants by GMV · 30d";
 
-  const recentEventRows = useMemo(() => {
-    if (recentEvents?.length) return recentEventsToRows(recentEvents);
-    if (data?.events.length) return recentEventsFromPlatformEvents(data.events);
-    return [];
-  }, [recentEvents, data?.events]);
+  const recentEventRows = useMemo(
+    () => (recentEvents?.length ? recentEventsToRows(recentEvents) : []),
+    [recentEvents],
+  );
 
-  const systemStatusRows = useMemo(() => {
-    if (systemStatus) return systemStatusToRows(systemStatus);
-    if (data?.health.length) return systemStatusFromHealth(data.health);
-    return [];
-  }, [systemStatus, data?.health]);
+  const systemStatusRows = useMemo(
+    () => (systemStatus ? systemStatusToRows(systemStatus) : []),
+    [systemStatus],
+  );
 
   const applicationRows = useMemo(() => {
     if (recentApplications?.length) return recentApplications;
@@ -409,7 +404,10 @@ function DashboardPage() {
                 </div>
               ))
             )}
-            {!topMerchantsLoading && !topMerchants.length && (
+            {!topMerchantsLoading && topMerchantsApiFailed && !topMerchants.length && (
+              <div className="text-xs text-muted-foreground">Top merchants API unavailable</div>
+            )}
+            {!topMerchantsLoading && !topMerchantsApiFailed && !topMerchants.length && (
               <div className="text-xs text-muted-foreground">No merchant GMV data yet</div>
             )}
           </div>
@@ -428,7 +426,10 @@ function DashboardPage() {
                 </div>
               ))
             )}
-            {!recentEventsLoading && !recentEventRows.length && (
+            {!recentEventsLoading && recentEventsApiFailed && !recentEventRows.length && (
+              <div className="text-xs text-muted-foreground">Recent events API unavailable</div>
+            )}
+            {!recentEventsLoading && !recentEventsApiFailed && !recentEventRows.length && (
               <div className="text-xs text-muted-foreground">No events yet</div>
             )}
           </div>
@@ -438,6 +439,8 @@ function DashboardPage() {
           <div className="space-y-3">
             {systemStatusLoading && !systemStatusRows.length ? (
               <Skeleton className="h-32 w-full rounded-lg" />
+            ) : systemStatusApiFailed && !systemStatusRows.length ? (
+              <div className="text-xs text-muted-foreground">System status API unavailable</div>
             ) : (
               systemStatusRows.map(({ key, status }) => {
                 const color = status === "healthy" ? "bg-primary" : status === "degraded" ? "bg-warning" : "bg-destructive";

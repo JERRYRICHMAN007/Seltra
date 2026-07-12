@@ -1,10 +1,12 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { Sidebar } from "@/components/Sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TopBar } from "@/components/TopBar";
+import { warmOpsDataCache } from "@/lib/prefetch-ops-data";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -14,9 +16,17 @@ function AppLayout() {
   useTheme();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login", replace: true });
   }, [user, loading, navigate]);
+
+  // Warm dashboard + sidebar routes in the background so pages open with data ready.
+  useEffect(() => {
+    if (!user) return;
+    warmOpsDataCache(queryClient);
+  }, [user, queryClient]);
 
   if (loading || !user) {
     return (

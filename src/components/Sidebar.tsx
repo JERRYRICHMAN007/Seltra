@@ -1,5 +1,6 @@
 import React from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Users,
@@ -28,6 +29,7 @@ import {
   SidebarFooter,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { prefetchRouteData } from "@/lib/prefetch-ops-data";
 
 const groups = [
   {
@@ -95,6 +97,11 @@ function isNavActive(currentPath: string, to: string) {
 
 export function Sidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const queryClient = useQueryClient();
+
+  function warmRoute(to: string) {
+    void prefetchRouteData(queryClient, to);
+  }
 
   return (
     <UISidebar collapsible="icon">
@@ -127,7 +134,14 @@ export function Sidebar() {
                       tooltip={it.label}
                       className="group mx-2 h-9 rounded-lg px-4 transition-colors duration-200 ease-out hover:bg-sidebar-active-bg hover:text-white data-[active=true]:bg-sidebar-active-bg data-[active=true]:font-medium data-[active=true]:text-sidebar-active group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:px-2"
                     >
-                      <Link to={it.to} preload="intent" className="cursor-pointer">
+                      <Link
+                        to={it.to}
+                        preload="intent"
+                        className="cursor-pointer"
+                        onMouseEnter={() => warmRoute(it.to)}
+                        onFocus={() => warmRoute(it.to)}
+                        onTouchStart={() => warmRoute(it.to)}
+                      >
                         <it.icon className="h-4 w-4 pointer-events-none dark:text-slate-300 dark:group-hover:text-white" />
                         <span className="group-data-[collapsible=icon]:hidden">{it.label}</span>
                       </Link>

@@ -8,7 +8,7 @@ export const getRouter = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 60 * 1000,
+        staleTime: 1000 * 60 * 2,
         // Supabase client + realtime are browser-first; skip SSR fetches on Vercel.
         enabled: !isServer,
       },

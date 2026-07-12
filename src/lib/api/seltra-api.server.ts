@@ -1,7 +1,14 @@
 import process from "node:process";
 
+const DEFAULT_SELTRA_API_BASE_URL = "https://seltra-merchant-backend.onrender.com";
+
 export function getSeltraApiConfig() {
-  const baseUrl = process.env.SELTRA_API_BASE_URL?.replace(/\/$/, "") ?? "";
+  const baseUrl = (
+    process.env.SELTRA_API_BASE_URL ||
+    process.env.VITE_SELTRA_API_BASE_URL ||
+    DEFAULT_SELTRA_API_BASE_URL
+  ).replace(/\/$/, "");
+
   const apiKey =
     process.env.SELTRA_INTERNAL_API_KEY ||
     process.env.OPS_INTERNAL_API_KEY ||
@@ -13,8 +20,10 @@ export function getSeltraApiConfig() {
 export async function seltraInternalFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const { baseUrl, apiKey } = getSeltraApiConfig();
 
-  if (!baseUrl || !apiKey) {
-    throw new Error("Missing SELTRA_API_BASE_URL or SELTRA_INTERNAL_API_KEY");
+  if (!apiKey) {
+    throw new Error(
+      "Missing SELTRA_INTERNAL_API_KEY (or OPS_INTERNAL_API_KEY). Add it in Vercel → Project Settings → Environment Variables (Production), then redeploy.",
+    );
   }
 
   let response: Response;
@@ -45,8 +54,10 @@ export async function seltraInternalFetch<T>(path: string, init?: RequestInit): 
 export async function seltraInternalFetchText(path: string, init?: RequestInit): Promise<string> {
   const { baseUrl, apiKey } = getSeltraApiConfig();
 
-  if (!baseUrl || !apiKey) {
-    throw new Error("Missing SELTRA_API_BASE_URL or SELTRA_INTERNAL_API_KEY");
+  if (!apiKey) {
+    throw new Error(
+      "Missing SELTRA_INTERNAL_API_KEY (or OPS_INTERNAL_API_KEY). Add it in Vercel → Project Settings → Environment Variables (Production), then redeploy.",
+    );
   }
 
   const response = await fetch(`${baseUrl}${path}`, {
@@ -76,4 +87,3 @@ export function buildSeltraQuery(params: Record<string, string | number | undefi
   const query = search.toString();
   return query ? `?${query}` : "";
 }
-

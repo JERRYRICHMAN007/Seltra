@@ -16,6 +16,7 @@ import { Route as AppSystemRouteImport } from './routes/_app/system'
 import { Route as AppRetentionRouteImport } from './routes/_app/retention'
 import { Route as AppPaymentsRouteImport } from './routes/_app/payments'
 import { Route as AppOrdersRouteImport } from './routes/_app/orders'
+import { Route as AppNetworkDomainsRouteImport } from './routes/_app/network-domains'
 import { Route as AppMerchantsRouteImport } from './routes/_app/merchants'
 import { Route as AppFeaturesRouteImport } from './routes/_app/features'
 import { Route as AppDeveloperRouteImport } from './routes/_app/developer'
@@ -60,6 +61,11 @@ const AppPaymentsRoute = AppPaymentsRouteImport.update({
 const AppOrdersRoute = AppOrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppNetworkDomainsRoute = AppNetworkDomainsRouteImport.update({
+  id: '/network-domains',
+  path: '/network-domains',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMerchantsRoute = AppMerchantsRouteImport.update({
@@ -128,6 +134,7 @@ export interface FileRoutesByFullPath {
   '/developer': typeof AppDeveloperRoute
   '/features': typeof AppFeaturesRoute
   '/merchants': typeof AppMerchantsRouteWithChildren
+  '/network-domains': typeof AppNetworkDomainsRoute
   '/orders': typeof AppOrdersRoute
   '/payments': typeof AppPaymentsRoute
   '/retention': typeof AppRetentionRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/api-monitor': typeof AppApiMonitorRoute
   '/developer': typeof AppDeveloperRoute
   '/features': typeof AppFeaturesRoute
+  '/network-domains': typeof AppNetworkDomainsRoute
   '/orders': typeof AppOrdersRoute
   '/payments': typeof AppPaymentsRoute
   '/retention': typeof AppRetentionRoute
@@ -166,6 +174,7 @@ export interface FileRoutesById {
   '/_app/developer': typeof AppDeveloperRoute
   '/_app/features': typeof AppFeaturesRoute
   '/_app/merchants': typeof AppMerchantsRouteWithChildren
+  '/_app/network-domains': typeof AppNetworkDomainsRoute
   '/_app/orders': typeof AppOrdersRoute
   '/_app/payments': typeof AppPaymentsRoute
   '/_app/retention': typeof AppRetentionRoute
@@ -188,6 +197,7 @@ export interface FileRouteTypes {
     | '/developer'
     | '/features'
     | '/merchants'
+    | '/network-domains'
     | '/orders'
     | '/payments'
     | '/retention'
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
     | '/api-monitor'
     | '/developer'
     | '/features'
+    | '/network-domains'
     | '/orders'
     | '/payments'
     | '/retention'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '/_app/developer'
     | '/_app/features'
     | '/_app/merchants'
+    | '/_app/network-domains'
     | '/_app/orders'
     | '/_app/payments'
     | '/_app/retention'
@@ -292,6 +304,13 @@ declare module '@tanstack/react-router' {
       path: '/orders'
       fullPath: '/orders'
       preLoaderRoute: typeof AppOrdersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/network-domains': {
+      id: '/_app/network-domains'
+      path: '/network-domains'
+      fullPath: '/network-domains'
+      preLoaderRoute: typeof AppNetworkDomainsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/merchants': {
@@ -398,6 +417,7 @@ interface AppRouteChildren {
   AppDeveloperRoute: typeof AppDeveloperRoute
   AppFeaturesRoute: typeof AppFeaturesRoute
   AppMerchantsRoute: typeof AppMerchantsRouteWithChildren
+  AppNetworkDomainsRoute: typeof AppNetworkDomainsRoute
   AppOrdersRoute: typeof AppOrdersRoute
   AppPaymentsRoute: typeof AppPaymentsRoute
   AppRetentionRoute: typeof AppRetentionRoute
@@ -413,6 +433,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDeveloperRoute: AppDeveloperRoute,
   AppFeaturesRoute: AppFeaturesRoute,
   AppMerchantsRoute: AppMerchantsRouteWithChildren,
+  AppNetworkDomainsRoute: AppNetworkDomainsRoute,
   AppOrdersRoute: AppOrdersRoute,
   AppPaymentsRoute: AppPaymentsRoute,
   AppRetentionRoute: AppRetentionRoute,

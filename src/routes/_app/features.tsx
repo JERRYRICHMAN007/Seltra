@@ -97,28 +97,21 @@ function FeaturesPage() {
     { label: "AI agents", pct: aiAdoption },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Feature usage" subtitle="How merchants are using platform features" />
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader title="Feature usage" subtitle="How merchants are using platform features" />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <MetricCard label="Total features" value={6} delta="platform capabilities" />
-        <MetricCard label="Average adoption" value={`${avgAdoption}%`} delta="merchants with orders" />
-        <MetricCard label="Most used" value="Orders API" delta="highest adoption" />
-        <MetricCard label="Least used" value="AI agents" delta="lowest adoption" />
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)
+        ) : (
+          <>
+            <MetricCard label="Total features" value={6} delta="platform capabilities" />
+            <MetricCard label="Average adoption" value={`${avgAdoption}%`} delta="merchants with orders" />
+            <MetricCard label="Most used" value="Orders API" delta="highest adoption" />
+            <MetricCard label="Least used" value="AI agents" delta="lowest adoption" />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

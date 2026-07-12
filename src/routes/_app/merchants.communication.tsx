@@ -41,9 +41,16 @@ function MessagingPage() {
     null,
   );
 
-  const { data: audience = [], isLoading } = useQuery({
+  const {
+    data: audience = [],
+    isLoading: audienceLoading,
+    isError: audienceFailed,
+    error: audienceError,
+    refetch: refetchAudience,
+  } = useQuery({
     queryKey: ["messaging-audience"],
     staleTime: 1000 * 60 * 2,
+    retry: 1,
     queryFn: () => listMessagingAudience(),
   });
 
@@ -53,24 +60,24 @@ function MessagingPage() {
     [audience],
   );
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Messaging" subtitle="Send email and SMS from Ops" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Skeleton className="h-48 rounded-2xl" />
-          <Skeleton className="h-48 rounded-2xl" />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
         title="Messaging"
         subtitle="Broadcast to merchants and applicants via Resend and Moolre — compose in Ops, send directly"
       />
+
+      {audienceFailed && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+          <div className="font-medium text-navy">Could not load recipients</div>
+          <p className="mt-1 text-muted-foreground">
+            {audienceError instanceof Error ? audienceError.message : "Audience request failed"}
+          </p>
+          <Button size="sm" variant="outline" className="mt-3" onClick={() => void refetchAudience()}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <button
@@ -86,7 +93,7 @@ function MessagingPage() {
             Resend · branded Seltra template · merchants and applicants with email
           </p>
           <p className="mt-4 text-xs font-mono text-muted-foreground">
-            {emailEligible.length} email-ready contacts
+            {audienceLoading ? "Loading contacts…" : `${emailEligible.length} email-ready contacts`}
           </p>
         </button>
 
@@ -103,7 +110,7 @@ function MessagingPage() {
             Moolre · applications with phone only · tenants without phone are excluded
           </p>
           <p className="mt-4 text-xs font-mono text-muted-foreground">
-            {smsEligible.length} SMS-ready applicants
+            {audienceLoading ? "Loading contacts…" : `${smsEligible.length} SMS-ready applicants`}
           </p>
         </button>
       </div>
@@ -124,6 +131,7 @@ function MessagingPage() {
         open={emailOpen}
         onOpenChange={setEmailOpen}
         audience={audience}
+        audienceLoading={audienceLoading}
         onSent={(result) => {
           setLastResult({ channel: "email", result });
           setEmailOpen(false);
@@ -134,6 +142,7 @@ function MessagingPage() {
         open={smsOpen}
         onOpenChange={setSmsOpen}
         audience={audience}
+        audienceLoading={audienceLoading}
         onSent={(result) => {
           setLastResult({ channel: "sms", result });
           setSmsOpen(false);
@@ -147,11 +156,13 @@ function EmailModal({
   open,
   onOpenChange,
   audience,
+  audienceLoading,
   onSent,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   audience: MessagingAudienceItem[];
+  audienceLoading: boolean;
   onSent: (result: SendMessagingResult) => void;
 }) {
   const [scope, setScope] = useState<Scope>("selected");
@@ -250,6 +261,7 @@ function EmailModal({
               search={search}
               onSearchChange={setSearch}
               items={filtered}
+              loading={audienceLoading}
               selectedIds={selectedIds}
               onToggle={(id, checked) => {
                 setSelectedIds((prev) => {
@@ -316,11 +328,13 @@ function SmsModal({
   open,
   onOpenChange,
   audience,
+  audienceLoading,
   onSent,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   audience: MessagingAudienceItem[];
+  audienceLoading: boolean;
   onSent: (result: SendMessagingResult) => void;
 }) {
   const [scope, setScope] = useState<Scope>("selected");
@@ -417,6 +431,7 @@ function SmsModal({
               search={search}
               onSearchChange={setSearch}
               items={filtered}
+              loading={audienceLoading}
               selectedIds={selectedIds}
               onToggle={(id, checked) => {
                 setSelectedIds((prev) => {
@@ -483,6 +498,7 @@ function RecipientScope({
   search,
   onSearchChange,
   items,
+  loading,
   selectedIds,
   onToggle,
   onSelectAll,
@@ -493,6 +509,7 @@ function RecipientScope({
   search: string;
   onSearchChange: (value: string) => void;
   items: MessagingAudienceItem[];
+  loading?: boolean;
   selectedIds: Set<string>;
   onToggle: (id: string, checked: boolean) => void;
   onSelectAll: () => void;
@@ -531,39 +548,49 @@ function RecipientScope({
               placeholder="Search…"
               className="h-8 border-0 bg-transparent shadow-none focus-visible:ring-0 px-0"
             />
-            <Button size="sm" variant="ghost" onClick={onSelectAll}>
+            <Button size="sm" variant="ghost" onClick={onSelectAll} disabled={loading}>
               All shown
             </Button>
           </div>
           <div className="max-h-48 overflow-y-auto divide-y divide-border">
-            {items.map((item) => {
-              const disabled = mode === "sms" && !item.smsEligible;
-              return (
-                <label
-                  key={item.id}
-                  className={`flex items-start gap-3 px-3 py-2.5 text-sm ${
-                    disabled ? "opacity-45 cursor-not-allowed" : "cursor-pointer hover:bg-surface-muted/60"
-                  }`}
-                >
-                  <Checkbox
-                    checked={selectedIds.has(item.id)}
-                    disabled={disabled}
-                    onCheckedChange={(v) => !disabled && onToggle(item.id, v === true)}
-                    className="mt-0.5"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-navy truncate">{item.label}</div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {item.ownerName}
-                      {mode === "email" && item.email ? ` · ${item.email}` : ""}
-                      {mode === "sms" && (item.smsEligible ? ` · ${item.phone}` : " · no phone on file")}
-                    </div>
-                  </div>
-                </label>
-              );
-            })}
-            {!items.length && (
-              <div className="py-8 text-center text-xs text-muted-foreground">No matches</div>
+            {loading ? (
+              <div className="space-y-2 p-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : (
+              <>
+                {items.map((item) => {
+                  const disabled = mode === "sms" && !item.smsEligible;
+                  return (
+                    <label
+                      key={item.id}
+                      className={`flex items-start gap-3 px-3 py-2.5 text-sm ${
+                        disabled ? "opacity-45 cursor-not-allowed" : "cursor-pointer hover:bg-surface-muted/60"
+                      }`}
+                    >
+                      <Checkbox
+                        checked={selectedIds.has(item.id)}
+                        disabled={disabled}
+                        onCheckedChange={(v) => !disabled && onToggle(item.id, v === true)}
+                        className="mt-0.5"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-navy truncate">{item.label}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {item.ownerName}
+                          {mode === "email" && item.email ? ` · ${item.email}` : ""}
+                          {mode === "sms" && (item.smsEligible ? ` · ${item.phone}` : " · no phone on file")}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+                {!items.length && (
+                  <div className="py-8 text-center text-xs text-muted-foreground">No matches</div>
+                )}
+              </>
             )}
           </div>
         </div>

@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Activity,
   Zap,
+  Globe,
   Settings,
 } from "lucide-react";
 import {
@@ -62,6 +63,7 @@ const groups = [
     items: [
       { to: "/system", label: "System Health", icon: Activity },
       { to: "/api-monitor", label: "API Monitor", icon: Zap },
+      { to: "/network-domains", label: "Network & Domains", icon: Globe },
     ],
   },
   {
@@ -123,11 +125,11 @@ export function Sidebar() {
                       asChild
                       isActive={active}
                       tooltip={it.label}
-                      className="group mx-2 h-9 rounded-lg px-4 transition-all duration-200 ease-out hover:translate-x-0.5 hover:bg-sidebar-active-bg hover:text-white data-[active=true]:bg-sidebar-active-bg data-[active=true]:font-medium data-[active=true]:text-sidebar-active group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:translate-x-0 group-data-[collapsible=icon]:px-2"
+                      className="group mx-2 h-9 rounded-lg px-4 transition-colors duration-200 ease-out hover:bg-sidebar-active-bg hover:text-white data-[active=true]:bg-sidebar-active-bg data-[active=true]:font-medium data-[active=true]:text-sidebar-active group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:px-2"
                     >
-                      <Link to={it.to}>
-                        <it.icon className="h-4 w-4 dark:text-slate-300 dark:group-hover:text-white" />
-                        <span>{it.label}</span>
+                      <Link to={it.to} preload="intent" className="cursor-pointer">
+                        <it.icon className="h-4 w-4 pointer-events-none dark:text-slate-300 dark:group-hover:text-white" />
+                        <span className="group-data-[collapsible=icon]:hidden">{it.label}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

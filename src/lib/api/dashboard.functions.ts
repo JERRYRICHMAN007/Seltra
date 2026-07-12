@@ -11,11 +11,18 @@ import type {
   DashboardTopMerchantsResponse,
 } from "./dashboard.types";
 import { normalizeFootprintPayload } from "./dashboard-footprint";
+import { normalizeDashboardOverview } from "./dashboard-overview";
 import { seltraInternalFetch } from "./seltra-api.server";
 
 export const getDashboardOverview = createServerFn({ method: "GET" }).handler(
-  async (): Promise<DashboardOverview> =>
-    seltraInternalFetch<DashboardOverview>("/internal/ops/dashboard/overview"),
+  async (): Promise<DashboardOverview> => {
+    const payload = await seltraInternalFetch<unknown>("/internal/ops/dashboard/overview");
+    const overview = normalizeDashboardOverview(payload);
+    if (!overview) {
+      throw new Error("Invalid overview payload from Seltra API");
+    }
+    return overview;
+  },
 );
 
 export const getDashboardFootprint = createServerFn({ method: "GET" }).handler(

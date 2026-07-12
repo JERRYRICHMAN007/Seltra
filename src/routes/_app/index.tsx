@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getDashboardActivitySeries, getDashboardFootprint, getDashboardGmvSeries, getDashboardOverview, getDashboardRecentApplications, getDashboardRecentEvents, getDashboardSystemStatus, getDashboardTopMerchants } from "@/lib/api/dashboard.functions";
-import type { DashboardOverview } from "@/lib/api/dashboard.types";
 import { activitySeriesFromEvents, activitySeriesToChartData } from "@/lib/api/dashboard-activity";
 import { gmvSeriesFromOrders, gmvSeriesToChartData } from "@/lib/api/dashboard-gmv";
 import { recentApplicationsFromSupabase } from "@/lib/api/dashboard-recent-applications";
@@ -27,11 +26,17 @@ export const Route = createFileRoute("/_app/")({
 });
 
 function DashboardPage() {
-  const { data: overview, isLoading: overviewLoading, isError: overviewApiFailed } = useQuery({
+  const {
+    data: overview,
+    isLoading: overviewLoading,
+    isError: overviewApiFailed,
+    error: overviewError,
+    refetch: refetchOverview,
+  } = useQuery({
     queryKey: ["dashboard-overview"],
     staleTime: 1000 * 60 * 2,
     gcTime: 1000 * 60 * 5,
-    retry: false,
+    retry: 1,
     queryFn: () => getDashboardOverview(),
   });
 
@@ -91,15 +96,14 @@ function DashboardPage() {
     queryFn: () => getDashboardRecentApplications(),
   });
 
-  const { data, isLoading: detailsLoading } = useQuery({
+  const { data } = useQuery({
     queryKey: ["dashboard-details"],
     staleTime: 1000 * 60 * 2,
     gcTime: 1000 * 60 * 5,
     queryFn: async () => {
-      const [merchants, orders, agents, events, health, apps] = await Promise.all([
+      const [merchants, orders, events, health, apps] = await Promise.all([
         supabase.from("merchants").select("id,name,slug,status,last_active_at,based_in"),
         supabase.from("orders").select("id,merchant_id,total_amount,status,created_at").order("created_at", { ascending: false }),
-        supabase.from("agent_invocations").select("id,created_at"),
         supabase.from("platform_events").select("id,event_type,merchant_id,created_at").order("created_at", { ascending: false }).limit(20),
         supabase.from("system_health").select("service,status,checked_at").order("checked_at", { ascending: false }).limit(50),
         supabase.from("merchant_applications").select("*").order("created_at", { ascending: false }),
@@ -107,7 +111,6 @@ function DashboardPage() {
       return {
         merchants: merchants.data ?? [],
         orders: orders.data ?? [],
-        agents: agents.data ?? [],
         events: events.data ?? [],
         health: health.data ?? [],
         apps: apps.data ?? [],
@@ -115,35 +118,14 @@ function DashboardPage() {
     },
   });
 
-  const isLoading = overviewLoading || detailsLoading;
-
   const merchantsById = new Map((data?.merchants ?? []).map((m) => [m.id, m]));
   const paidOrders = (data?.orders ?? []).filter((o) => o.status === "paid");
-  const paidOrders30d = paidOrders.filter(
-    (o) => new Date(o.created_at).getTime() > Date.now() - 30 * 86400000,
-  );
-  const monthGmv = paidOrders30d.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
-  const fallbackOverview = useMemo((): DashboardOverview | null => {
-    if (!data) return null;
-    const merchants = data.merchants;
-    const apps = data.apps;
-    return {
-      totalMerchantsStores: merchants.length,
-      activeMerchantsStores: merchants.filter((m) => m.status === "active").length,
-      gmv30d: { amount: monthGmv.toFixed(2), currency: "GHS" },
-      paidOrders30d: paidOrders30d.length,
-      waitlistApplicants: apps.filter((a) => !a.merchant_id).length,
-      approvedToOnboard: apps.filter((a) => a.status === "approved" && !a.merchant_id).length,
-      merchantSuccess: apps.filter((a) => Boolean(a.merchant_id)).length,
-      aiInvocations24h: (data.agents ?? []).filter(
-        (a) => new Date(a.created_at).getTime() > Date.now() - 86400000,
-      ).length,
-    };
-  }, [data, monthGmv, paidOrders30d.length]);
-
-  const metrics = overview ?? fallbackOverview;
-  const metricsUnavailable = !metrics && overviewApiFailed && !detailsLoading;
+  // Overview metric cards are API-only — no Supabase fallback (backend is source of truth).
+  const metrics = overview ?? null;
+  const metricsUnavailable = overviewApiFailed && !overview;
+  const overviewErrorMessage =
+    overviewError instanceof Error ? overviewError.message : "Dashboard overview API unavailable";
 
   const resolvedFootprint = useMemo(() => {
     if (footprint) return footprint;
@@ -215,22 +197,24 @@ function DashboardPage() {
     topMarket: resolvedFootprint?.topMarket ?? "—",
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Dashboard" subtitle="Real-time overview of the Seltra platform" />
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="Real-time overview of the Seltra platform" />
+
+      {metricsUnavailable && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+          <div className="font-medium text-navy">Overview metrics unavailable</div>
+          <p className="mt-1 text-muted-foreground">
+            Could not reach <span className="font-mono text-xs">GET /internal/ops/dashboard/overview</span>.
+            Ensure the Seltra backend is running and <span className="font-mono text-xs">SELTRA_API_BASE_URL</span> /{" "}
+            <span className="font-mono text-xs">SELTRA_INTERNAL_API_KEY</span> are set.
+          </p>
+          <p className="mt-1 font-mono text-xs text-muted-foreground break-all">{overviewErrorMessage}</p>
+          <Button size="sm" variant="outline" className="mt-3" onClick={() => void refetchOverview()}>
+            Retry overview
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-3 gap-4">
@@ -241,7 +225,7 @@ function DashboardPage() {
               metrics
                 ? `${formatCompact(metrics.activeMerchantsStores)} active`
                 : metricsUnavailable
-                  ? "unavailable"
+                  ? "API unavailable"
                   : overviewLoading
                     ? "loading…"
                     : "—"
@@ -254,7 +238,7 @@ function DashboardPage() {
               metrics
                 ? `${formatCompact(metrics.paidOrders30d)} paid orders`
                 : metricsUnavailable
-                  ? "unavailable"
+                  ? "API unavailable"
                   : overviewLoading
                     ? "loading…"
                     : "—"
@@ -263,22 +247,22 @@ function DashboardPage() {
           <MetricCard
             label="Waitlist applicants"
             value={metrics ? formatCompact(metrics.waitlistApplicants) : "—"}
-            delta={metrics ? "seen by Ops" : metricsUnavailable ? "unavailable" : overviewLoading ? "loading…" : "—"}
+            delta={metrics ? "seen by Ops" : metricsUnavailable ? "API unavailable" : overviewLoading ? "loading…" : "—"}
           />
           <MetricCard
             label="Approved to onboard"
             value={metrics ? formatCompact(metrics.approvedToOnboard) : "—"}
-            delta={metrics ? "ready for launch" : metricsUnavailable ? "unavailable" : overviewLoading ? "loading…" : "—"}
+            delta={metrics ? "ready for launch" : metricsUnavailable ? "API unavailable" : overviewLoading ? "loading…" : "—"}
           />
           <MetricCard
             label="Merchant success"
             value={metrics ? formatCompact(metrics.merchantSuccess) : "—"}
-            delta={metrics ? "onboarded" : metricsUnavailable ? "unavailable" : overviewLoading ? "loading…" : "—"}
+            delta={metrics ? "onboarded" : metricsUnavailable ? "API unavailable" : overviewLoading ? "loading…" : "—"}
           />
           <MetricCard
             label="AI Invocations (24h)"
             value={metrics ? formatCompact(metrics.aiInvocations24h) : "—"}
-            delta={metrics ? "across all merchants" : metricsUnavailable ? "unavailable" : overviewLoading ? "loading…" : "—"}
+            delta={metrics ? "across all merchants" : metricsUnavailable ? "API unavailable" : overviewLoading ? "loading…" : "—"}
           />
         </div>
 

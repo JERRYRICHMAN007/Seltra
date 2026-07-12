@@ -162,15 +162,6 @@ function MerchantsPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Merchants" subtitle="All registered stores on Seltra" />
-        <Skeleton className="h-96 w-full rounded-xl" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -249,6 +240,13 @@ function MerchantsPage() {
             </SelectContent>
           </Select>
         </div>
+        {isLoading ? (
+          <div className="space-y-2 py-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -336,10 +334,11 @@ function MerchantsPage() {
             </tbody>
           </table>
         </div>
-        {!merchantRows.length && (
+        )}
+        {!isLoading && !merchantRows.length && (
           <div className="py-8 text-center text-xs text-muted-foreground">No merchants found</div>
         )}
-        {resolvedResult && resolvedResult.totalPages > 1 && (
+        {!isLoading && resolvedResult && resolvedResult.totalPages > 1 && (
           <div className="mt-4 flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
               Page {resolvedResult.page} of {resolvedResult.totalPages} · {resolvedResult.total} merchants

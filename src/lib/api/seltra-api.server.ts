@@ -17,14 +17,20 @@ export async function seltraInternalFetch<T>(path: string, init?: RequestInit): 
     throw new Error("Missing SELTRA_API_BASE_URL or SELTRA_INTERNAL_API_KEY");
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      "X-Internal-Api-Key": apiKey,
-      ...init?.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers: {
+        Accept: "application/json",
+        "X-Internal-Api-Key": apiKey,
+        ...init?.headers,
+      },
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "network error";
+    throw new Error(`Cannot reach Seltra API at ${baseUrl}${path} (${reason})`);
+  }
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");

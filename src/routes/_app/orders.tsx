@@ -25,28 +25,15 @@ function OrdersPage() {
     gmv: orders.filter((o: any) => o.status === "paid").reduce((s: number, o: any) => s + Number(o.total_amount), 0),
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Orders" subtitle="All orders across the platform" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader title="Orders" subtitle="All orders across the platform" />
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <MetricCard label="Total" value={totals.all} />
-        <MetricCard label="Paid" value={totals.paid} />
-        <MetricCard label="Pending" value={totals.pending} accent="warning" />
-        <MetricCard label="Failed" value={totals.failed} accent="destructive" />
-        <MetricCard label="GMV" value={formatGHS(totals.gmv)} />
+        <MetricCard label="Total" value={isLoading ? "…" : totals.all} />
+        <MetricCard label="Paid" value={isLoading ? "…" : totals.paid} />
+        <MetricCard label="Pending" value={isLoading ? "…" : totals.pending} accent="warning" />
+        <MetricCard label="Failed" value={isLoading ? "…" : totals.failed} accent="destructive" />
+        <MetricCard label="GMV" value={isLoading ? "…" : formatGHS(totals.gmv)} />
       </div>
       <Card>
         <div className="overflow-x-auto">

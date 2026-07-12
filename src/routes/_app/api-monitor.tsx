@@ -154,22 +154,6 @@ function ApiMonitorPage() {
 
   const isLoading = healthLoading || eventsLoading;
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title="API monitor"
-          subtitle="Real-time health and request log for all platform services"
-        />
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -178,10 +162,16 @@ function ApiMonitorPage() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <MetricCard label="Uptime" value={`${uptimePct}%`} delta="across all health checks" />
-        <MetricCard label="Avg latency" value="—" delta="not available yet" />
-        <MetricCard label="Total events (24h)" value={formatNumber(events24h)} delta="platform events" />
-        <MetricCard label="Error rate" value="—" delta="not available yet" />
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)
+        ) : (
+          <>
+            <MetricCard label="Uptime" value={`${uptimePct}%`} delta="across all health checks" />
+            <MetricCard label="Avg latency" value="—" delta="not available yet" />
+            <MetricCard label="Total events (24h)" value={formatNumber(events24h)} delta="platform events" />
+            <MetricCard label="Error rate" value="—" delta="not available yet" />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

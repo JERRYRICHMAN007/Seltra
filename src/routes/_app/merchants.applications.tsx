@@ -213,22 +213,6 @@ function ApplicationsOnboardingPage() {
     setRejectOpen(true);
   }
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Applications & Onboarding"
-          subtitle="Review applications and approve merchants"
-        />
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -249,6 +233,13 @@ function ApplicationsOnboardingPage() {
             className="max-w-sm bg-surface-muted border-input"
           />
         </div>
+        {isLoading ? (
+          <div className="space-y-2 py-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -364,6 +355,7 @@ function ApplicationsOnboardingPage() {
             </tbody>
           </table>
         </div>
+        )}
       </Card>
 
       {approvalResult && (

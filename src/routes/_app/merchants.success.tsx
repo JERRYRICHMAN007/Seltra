@@ -126,43 +126,32 @@ function MerchantSuccessPage() {
       .sort((a, b) => b.daysSinceOnboarded - a.daysSinceOnboarded);
   }, [merchants]);
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Merchant Success" subtitle="Onboarding health and platform success overview" />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-xl" />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Skeleton className="h-56 w-full rounded-xl" />
-          <Skeleton className="h-56 w-full rounded-xl" />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader title="Merchant Success" subtitle="Onboarding health and platform success overview" />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <MetricCard
-          label="Onboarding pipeline"
-          value={formatCompact(onboardingPipeline)}
-          delta="approved or applied"
-        />
-        <MetricCard
-          label="Successfully onboarded"
-          value={formatCompact(successfullyOnboarded)}
-          delta="live merchants"
-        />
-        <MetricCard
-          label="Avg time to onboard"
-          value={avgTimeToOnboard != null ? `${avgTimeToOnboard} days` : "—"}
-          delta={avgTimeToOnboard != null ? "application to go-live" : "no completed onboardings yet"}
-        />
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)
+        ) : (
+          <>
+            <MetricCard
+              label="Onboarding pipeline"
+              value={formatCompact(onboardingPipeline)}
+              delta="approved or applied"
+            />
+            <MetricCard
+              label="Successfully onboarded"
+              value={formatCompact(successfullyOnboarded)}
+              delta="live merchants"
+            />
+            <MetricCard
+              label="Avg time to onboard"
+              value={avgTimeToOnboard != null ? `${avgTimeToOnboard} days` : "—"}
+              delta={avgTimeToOnboard != null ? "application to go-live" : "no completed onboardings yet"}
+            />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

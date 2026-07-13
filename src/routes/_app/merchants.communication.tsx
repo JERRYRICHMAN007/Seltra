@@ -55,16 +55,13 @@ function MessagingPage() {
   });
 
   const emailEligible = useMemo(() => audience.filter((a) => Boolean(a.email)), [audience]);
-  const smsEligible = useMemo(
-    () => audience.filter((a) => a.source === "application" && a.smsEligible),
-    [audience],
-  );
+  const smsEligible = useMemo(() => audience.filter((a) => a.smsEligible), [audience]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Messaging"
-        subtitle="Broadcast to merchants and applicants via Resend and Moolre — compose in Ops, send directly"
+        subtitle="Contacts from Seltra merchant applications · email via Resend · SMS via Moolre"
       />
 
       {audienceFailed && (
@@ -90,7 +87,7 @@ function MessagingPage() {
           </div>
           <h2 className="mt-4 text-lg font-semibold text-navy">Send Email</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Resend · branded Seltra template · merchants and applicants with email
+            Resend · branded Seltra template · applications with email on file
           </p>
           <p className="mt-4 text-xs font-mono text-muted-foreground">
             {audienceLoading ? "Loading contacts…" : `${emailEligible.length} email-ready contacts`}
@@ -107,7 +104,7 @@ function MessagingPage() {
           </div>
           <h2 className="mt-4 text-lg font-semibold text-navy">Send SMS</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Moolre · applications with phone only · tenants without phone are excluded
+            Moolre · applications with a phone number only
           </p>
           <p className="mt-4 text-xs font-mono text-muted-foreground">
             {audienceLoading ? "Loading contacts…" : `${smsEligible.length} SMS-ready applicants`}
@@ -205,7 +202,7 @@ function EmailModal({
           channel: "email",
           scope,
           recipientIds: scope === "selected" ? Array.from(selectedIds) : [],
-          sourceType: "mixed",
+          sourceType: "application",
         },
       }),
     onSuccess: (data) => {
@@ -221,7 +218,7 @@ function EmailModal({
         data: {
           scope,
           recipientIds: scope === "selected" ? Array.from(selectedIds) : [],
-          sourceType: "mixed",
+          sourceType: "application",
           title: title.trim(),
           body: body.trim(),
         },
@@ -250,7 +247,8 @@ function EmailModal({
           <DialogHeader>
             <DialogTitle>Send Email</DialogTitle>
             <DialogDescription>
-              Recipients are resolved on the server from current merchant/application records.
+              Recipients are resolved on the server from Seltra{" "}
+              <span className="font-mono text-[11px]">/internal/ops/merchants/messaging</span>.
             </DialogDescription>
           </DialogHeader>
 
@@ -344,11 +342,7 @@ function SmsModal({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
 
-  // SMS picker: applications only; show ineligible tenants greyed if mixed view — guide says apps only
-  const smsPool = useMemo(
-    () => audience.filter((a) => a.source === "application"),
-    [audience],
-  );
+  const smsPool = audience;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -420,7 +414,7 @@ function SmsModal({
           <DialogHeader>
             <DialogTitle>Send SMS</DialogTitle>
             <DialogDescription>
-              Applications with phone numbers only. Tenants without a phone field are not included.
+              Applications with phone numbers only. Contacts without a phone are shown greyed out.
             </DialogDescription>
           </DialogHeader>
 

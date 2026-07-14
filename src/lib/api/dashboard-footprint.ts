@@ -145,6 +145,179 @@ export function footprintCountriesMap(footprint: DashboardFootprint) {
   return Object.fromEntries(footprint.countries.map((c) => [c.country, c.count]));
 }
 
+/** Only these names may appear as country chips under the globe. */
+const KNOWN_COUNTRIES = new Set([
+  "Ghana",
+  "Nigeria",
+  "Kenya",
+  "South Africa",
+  "Côte d'Ivoire",
+  "Ivory Coast",
+  "Senegal",
+  "Rwanda",
+  "Uganda",
+  "Tanzania",
+  "Egypt",
+  "Morocco",
+  "Ethiopia",
+  "United Kingdom",
+  "United States",
+  "USA",
+  "UK",
+  "Canada",
+  "Germany",
+  "France",
+  "India",
+  "China",
+  "Brazil",
+]);
+
+/** Place / neighborhood / city → parent country */
+const PLACE_TO_COUNTRY: Record<string, string> = {
+  Accra: "Ghana",
+  Kumasi: "Ghana",
+  Tema: "Ghana",
+  Tamale: "Ghana",
+  Takoradi: "Ghana",
+  Sunyani: "Ghana",
+  Koforidua: "Ghana",
+  Ho: "Ghana",
+  Kasoa: "Ghana",
+  Pokuase: "Ghana",
+  Madina: "Ghana",
+  "East Legon": "Ghana",
+  Legon: "Ghana",
+  Spintex: "Ghana",
+  Osu: "Ghana",
+  Adenta: "Ghana",
+  Ashaiman: "Ghana",
+  "Cape Coast": "Ghana",
+  Botwe: "Ghana",
+  "Ashaley Botwe": "Ghana",
+  "Ashaley Botwe Lakeside Estate": "Ghana",
+  "Lakeside Estate": "Ghana",
+  "Santa Maria": "Ghana",
+  "Tse Addo": "Ghana",
+  "Tse Addo Accra": "Ghana",
+  "Kasoa Accra": "Ghana",
+  "Accra Ashaley botwe zoomlion": "Ghana",
+  Lagos: "Nigeria",
+  Abuja: "Nigeria",
+  Ibadan: "Nigeria",
+  Kano: "Nigeria",
+  Nairobi: "Kenya",
+  Mombasa: "Kenya",
+  Johannesburg: "South Africa",
+  "Cape Town": "South Africa",
+  Durban: "South Africa",
+  Pretoria: "South Africa",
+  Abidjan: "Côte d'Ivoire",
+  Dakar: "Senegal",
+  Kigali: "Rwanda",
+  Kampala: "Uganda",
+  Cairo: "Egypt",
+  Casablanca: "Morocco",
+  "Addis Ababa": "Ethiopia",
+};
+
+function isKnownCountry(place: string) {
+  return KNOWN_COUNTRIES.has(normalizePlace(place));
+}
+
+function inferParentCountry(place: string, fallbackCountry: string | null): string {
+  const key = normalizePlace(place);
+  if (isKnownCountry(key)) return key;
+
+  const exact = PLACE_TO_COUNTRY[key];
+  if (exact) return exact;
+
+  const lower = key.toLowerCase();
+  for (const [placeName, country] of Object.entries(PLACE_TO_COUNTRY)) {
+    if (lower.includes(placeName.toLowerCase())) return country;
+  }
+  for (const country of KNOWN_COUNTRIES) {
+    if (lower.includes(country.toLowerCase())) return country;
+  }
+
+  // Unrecognized neighborhoods (Pokuase, Ashaley Botwe Lakeside Estate, etc.)
+  // fold into the dominant / top market country when it is a real country.
+  if (fallbackCountry && isKnownCountry(fallbackCountry)) return normalizePlace(fallbackCountry);
+  return "Ghana";
+}
+
+/**
+ * Ensure only real countries sit at the top level. City/neighborhood rows
+ * that the API returned as "countries" are folded under their parent country.
+ */
+export function canonicalizeFootprint(footprint: DashboardFootprint): DashboardFootprint {
+  const buckets = new Map<string, { count: number; cities: Map<string, number> }>();
+
+  const ensure = (country: string) => {
+    const name = normalizePlace(country) || "Unknown";
+    if (!buckets.has(name)) buckets.set(name, { count: 0, cities: new Map() });
+    return buckets.get(name)!;
+  };
+
+  const knownInPayload = footprint.countries
+    .map((c) => normalizePlace(c.country))
+    .filter((c) => isKnownCountry(c));
+  const fallbackCountry =
+    (footprint.topMarket && isKnownCountry(footprint.topMarket) ? normalizePlace(footprint.topMarket) : null) ||
+    knownInPayload[0] ||
+    "Ghana";
+
+  for (const entry of footprint.countries) {
+    const place = normalizePlace(entry.country);
+    if (!place) continue;
+
+    if (isKnownCountry(place)) {
+      const bucket = ensure(place);
+      if (entry.count > 0) bucket.count = Math.max(bucket.count, entry.count);
+      for (const city of entry.cities) {
+        const cityName = normalizePlace(city.city);
+        if (!cityName || cityName.toLowerCase() === place.toLowerCase()) continue;
+        // Nested city that is itself a known country name — skip
+        if (isKnownCountry(cityName)) continue;
+        bucket.cities.set(cityName, (bucket.cities.get(cityName) ?? 0) + city.count);
+      }
+      continue;
+    }
+
+    // Place is a city / estate / neighborhood — never a top-level country chip
+    const parent = inferParentCountry(place, fallbackCountry);
+    const bucket = ensure(parent);
+    bucket.cities.set(place, (bucket.cities.get(place) ?? 0) + entry.count);
+    for (const city of entry.cities) {
+      const cityName = normalizePlace(city.city);
+      if (!cityName || isKnownCountry(cityName)) continue;
+      bucket.cities.set(cityName, (bucket.cities.get(cityName) ?? 0) + city.count);
+    }
+  }
+
+  const countries = Array.from(buckets.entries())
+    .filter(([country]) => isKnownCountry(country))
+    .map(([country, { count, cities }]) => {
+      const cityRows = Array.from(cities.entries())
+        .map(([city, c]) => ({ city, count: c }))
+        .sort((a, b) => b.count - a.count);
+      const citySum = cityRows.reduce((s, c) => s + c.count, 0);
+      return {
+        country,
+        // Prefer sum of places so the chip matches the box list
+        count: cityRows.length ? citySum : count,
+        cities: cityRows,
+      };
+    })
+    .filter((c) => c.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    ...footprint,
+    countries,
+    topMarket: countries[0]?.country ?? footprint.topMarket,
+  };
+}
+
 type MerchantLocation = { based_in?: string | null; status?: string };
 
 /** Fallback when /dashboard/footprint API is unavailable. */

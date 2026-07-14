@@ -8,13 +8,13 @@ import { recentApplicationsFromSupabase } from "@/lib/api/dashboard-recent-appli
 import { recentEventsToRows } from "@/lib/api/dashboard-recent-events";
 import { systemStatusToRows } from "@/lib/api/dashboard-system-status";
 import { topMerchantsToRows } from "@/lib/api/dashboard-top-merchants";
-import { footprintCountriesMap, footprintFromMerchants, footprintToGlobePoints } from "@/lib/api/dashboard-footprint";
+import { footprintFromMerchants, footprintToGlobePoints, canonicalizeFootprint } from "@/lib/api/dashboard-footprint";
 import { PageHeader, MetricCard, StatusBadge, Card } from "@/components/ui-bits";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { formatGHS, formatNumber, formatCompact } from "@/lib/format";
 import { LineChart, Line, BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
-import { Suspense, lazy, useMemo } from "react";
+import { Suspense, lazy, useMemo, useState } from "react";
 import type { GlobePoint } from "@/components/GlobeMap";
 import { ClientOnly } from "@/components/client-only";
 
@@ -26,6 +26,8 @@ export const Route = createFileRoute("/_app/")({
 });
 
 function DashboardPage() {
+  const [focusCountry, setFocusCountry] = useState<string | null>(null);
+
   const {
     data: overview,
     isLoading: overviewLoading,
@@ -125,15 +127,26 @@ function DashboardPage() {
     overviewError instanceof Error ? overviewError.message : "Dashboard overview API unavailable";
 
   const resolvedFootprint = useMemo(() => {
-    if (footprint) return footprint;
-    // Only fall back after the footprint API has failed — map is powered by /dashboard/footprint
-    if (footprintApiFailed && data?.merchants.length) {
-      return footprintFromMerchants(data.merchants);
-    }
-    return null;
+    const raw = (() => {
+      if (footprint) return footprint;
+      // Only fall back after the footprint API has failed — map is powered by /dashboard/footprint
+      if (footprintApiFailed && data?.merchants.length) {
+        return footprintFromMerchants(data.merchants);
+      }
+      return null;
+    })();
+    return raw ? canonicalizeFootprint(raw) : null;
   }, [footprint, footprintApiFailed, data?.merchants]);
 
   const footprintFromApi = Boolean(footprint);
+
+  const countryPills = useMemo(() => {
+    if (!resolvedFootprint) return [] as Array<{ country: string; count: number }>;
+    return resolvedFootprint.countries.map((c) => ({
+      country: c.country,
+      count: c.count,
+    }));
+  }, [resolvedFootprint]);
 
   const gmvDays = useMemo(() => {
     if (gmvSeries?.length) return gmvSeriesToChartData(gmvSeries);
@@ -177,11 +190,6 @@ function DashboardPage() {
 
   const globeData = useMemo(
     () => (resolvedFootprint ? footprintToGlobePoints(resolvedFootprint) : []),
-    [resolvedFootprint],
-  );
-
-  const merchantsByCountry = useMemo(
-    () => (resolvedFootprint ? footprintCountriesMap(resolvedFootprint) : {}),
     [resolvedFootprint],
   );
 
@@ -310,34 +318,52 @@ function DashboardPage() {
               {footprintLoading && !resolvedFootprint ? (
                 <div className="px-6 pb-4"><Skeleton className="h-64 w-full rounded-xl" /></div>
               ) : (
-                <GlobeMap points={globeData as GlobePoint[]} />
+                <GlobeMap
+                  points={globeData as GlobePoint[]}
+                  countriesFootprint={resolvedFootprint?.countries ?? []}
+                  focusCountry={focusCountry}
+                  onFocusCountryChange={setFocusCountry}
+                />
               )}
             </Suspense>
           </ClientOnly>
 
           <div className="relative flex flex-wrap gap-2 px-5 pb-4 pt-1">
-            {Object.entries(merchantsByCountry)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 6)
-              .map(([country, count]) => (
-                <div
-                  key={country}
+            {countryPills.map((pill) => (
+              <button
+                key={pill.country}
+                type="button"
+                onClick={() => setFocusCountry(pill.country)}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-white transition-colors hover:bg-[rgba(29,158,117,0.28)]"
+                style={{
+                  background:
+                    focusCountry === pill.country
+                      ? "rgba(29,158,117,0.35)"
+                      : "rgba(29,158,117,0.15)",
+                  border:
+                    focusCountry === pill.country
+                      ? "1px solid rgba(29,158,117,0.7)"
+                      : "1px solid rgba(29,158,117,0.3)",
+                  cursor: "pointer",
+                }}
+              >
+                <span
                   style={{
-                    background: "rgba(29,158,117,0.15)",
-                    border: "1px solid rgba(29,158,117,0.3)",
-                    borderRadius: "20px",
-                    padding: "4px 12px",
-                    fontSize: "12px",
-                    color: "white",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: "#1D9E75",
+                    display: "inline-block",
                   }}
-                >
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#1D9E75", display: "inline-block" }} />
-                  {country} · {count}
-                </div>
-              ))}
+                />
+                {pill.country} · {pill.count}
+              </button>
+            ))}
+            {!countryPills.length && resolvedFootprint && (
+              <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
+                No country data yet
+              </span>
+            )}
           </div>
         </div>
       </div>

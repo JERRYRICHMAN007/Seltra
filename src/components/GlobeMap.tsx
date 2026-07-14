@@ -10,8 +10,25 @@ export type GlobePoint = {
   country?: string;
 };
 
+export type FootprintCountryInput = {
+  country: string;
+  count: number;
+  cities: Array<{ city: string; count: number }>;
+};
+
+type CountrySelection = {
+  name: string;
+  count: number;
+  places: Array<{ label: string; count: number }>;
+};
+
 type GlobeMapProps = {
   points?: GlobePoint[];
+  /** Canonical country → cities from footprint API (drives the places box). */
+  countriesFootprint?: FootprintCountryInput[];
+  /** When set (e.g. from a country chip click), open that country's places box. */
+  focusCountry?: string | null;
+  onFocusCountryChange?: (country: string | null) => void;
 };
 
 const COUNTRIES_GEOJSON_URL =
@@ -28,7 +45,48 @@ function getCountryName(d: { properties?: { NAME?: string; ADMIN?: string } }) {
   return d.properties?.NAME || d.properties?.ADMIN || "";
 }
 
-export default function GlobeMap({ points = [] }: GlobeMapProps) {
+function buildSelection(
+  name: string,
+  countriesFootprint: FootprintCountryInput[],
+  points: GlobePoint[],
+  pointCounts: Record<string, number>,
+): CountrySelection | null {
+  const entry = countriesFootprint.find((c) => c.country === name);
+  if (entry) {
+    const places =
+      entry.cities.length > 0
+        ? entry.cities.map((city) => ({
+            label: `${city.city}, ${entry.country}`,
+            count: city.count,
+          }))
+        : [{ label: entry.country, count: entry.count }];
+    const placeSum = places.reduce((sum, p) => sum + p.count, 0);
+    return {
+      name: entry.country,
+      count: placeSum || entry.count,
+      places,
+    };
+  }
+
+  const fromPoints = points.filter((p) => p.country === name);
+  if (!fromPoints.length && !pointCounts[name]) return null;
+
+  return {
+    name,
+    count: pointCounts[name] || fromPoints.reduce((s, p) => s + (p.count ?? 1), 0),
+    places: fromPoints.map((p) => ({
+      label: p.label ?? name,
+      count: p.count ?? 1,
+    })),
+  };
+}
+
+export default function GlobeMap({
+  points = [],
+  countriesFootprint = [],
+  focusCountry = null,
+  onFocusCountryChange,
+}: GlobeMapProps) {
   const globeRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -39,11 +97,7 @@ export default function GlobeMap({ points = [] }: GlobeMapProps) {
   const [mapCenter, setMapCenter] = useState<[number, number]>(MAP_DEFAULT_CENTER);
   const [isMapView, setIsMapView] = useState(false);
   const [hoveredMapCountry, setHoveredMapCountry] = useState<string | null>(null);
-  const [selectedCountry, setSelectedCountry] = useState<{
-    name: string;
-    count: number;
-    merchants: { label: string; count: number }[];
-  } | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<CountrySelection | null>(null);
 
   useEffect(() => {
     fetch(COUNTRIES_GEOJSON_URL)
@@ -81,17 +135,60 @@ export default function GlobeMap({ points = [] }: GlobeMapProps) {
     return () => clearTimeout(timer);
   }, [isMapView, dimensions.width, countries.length]);
 
-  const merchantsByCountry = useMemo(
-    () =>
-      points.reduce(
-        (acc, p) => {
-          if (p.country) acc[p.country] = (acc[p.country] || 0) + (p.count ?? 1);
-          return acc;
-        },
-        {} as Record<string, number>,
-      ),
-    [points],
+  const merchantsByCountry = useMemo(() => {
+    const fromFootprint = Object.fromEntries(
+      countriesFootprint.map((c) => {
+        const citySum = c.cities.reduce((s, city) => s + city.count, 0);
+        return [c.country, citySum || c.count];
+      }),
+    ) as Record<string, number>;
+
+    if (Object.keys(fromFootprint).length) return fromFootprint;
+
+    return points.reduce(
+      (acc, p) => {
+        if (p.country) acc[p.country] = (acc[p.country] || 0) + (p.count ?? 1);
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+  }, [countriesFootprint, points]);
+
+  const openCountry = useCallback(
+    (name: string) => {
+      const selection = buildSelection(name, countriesFootprint, points, merchantsByCountry);
+      if (!selection) return;
+      setSelectedCountry(selection);
+      onFocusCountryChange?.(name);
+
+      const anchor = points.find((p) => p.country === name);
+      if (!isMapView && globeRef.current && anchor) {
+        globeRef.current.pointOfView({ lat: anchor.lat, lng: anchor.lng, altitude: 1.5 }, 800);
+      }
+    },
+    [countriesFootprint, points, merchantsByCountry, onFocusCountryChange, isMapView],
   );
+
+  const closeCountry = useCallback(() => {
+    setSelectedCountry(null);
+    onFocusCountryChange?.(null);
+    if (isMapView) {
+      setMapZoomScale(MAP_DEFAULT_ZOOM);
+      setMapCenter(MAP_DEFAULT_CENTER);
+    } else {
+      setZoomLevel(2.0);
+      globeRef.current?.pointOfView({ lat: 20, lng: 10, altitude: 2.0 }, 800);
+    }
+  }, [isMapView, onFocusCountryChange]);
+
+  // Country chips (or parent) request opening a country box
+  useEffect(() => {
+    if (!focusCountry) {
+      setSelectedCountry(null);
+      return;
+    }
+    openCountry(focusCountry);
+  }, [focusCountry]); // eslint-disable-line react-hooks/exhaustive-deps -- open on external focus only
 
   useEffect(() => {
     if (!isMapView) setHoveredMapCountry(null);
@@ -153,16 +250,10 @@ export default function GlobeMap({ points = [] }: GlobeMapProps) {
         const centroid = d3.geoCentroid(d) as [number, number];
         setMapCenter(centroid);
         setMapZoomScale((s) => Math.min(s + 0.45, MAP_MAX_ZOOM));
-
-        const count = merchantsByCountry[name] || 0;
-        if (count === 0) return;
-
-        const merchantsInCountry = points
-          .filter((p) => p.country === name)
-          .map((p) => ({ label: p.label ?? name, count: p.count ?? 1 }));
-        setSelectedCountry({ name, count, merchants: merchantsInCountry });
+        if (!merchantsByCountry[name]) return;
+        openCountry(name);
       });
-  }, [isMapView, countries, merchantsByCountry, mapProjection, points]);
+  }, [isMapView, countries, merchantsByCountry, mapProjection, openCountry]);
 
   const zoomIn = () => {
     if (isMapView) {
@@ -222,44 +313,44 @@ export default function GlobeMap({ points = [] }: GlobeMapProps) {
             gap: 4,
           }}
         >
-            <button
-              type="button"
-              onClick={zoomIn}
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 8,
-                background: "rgba(255,255,255,0.1)",
-                border: "1px solid rgba(255,255,255,0.2)",
-                color: "white",
-                fontSize: 18,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                backdropFilter: "blur(4px)",
-              }}
-            >
-              +
-            </button>
-            <button
-              type="button"
-              onClick={zoomOut}
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 8,
-                background: "rgba(255,255,255,0.1)",
-                border: "1px solid rgba(255,255,255,0.2)",
-                color: "white",
-                fontSize: 18,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                backdropFilter: "blur(4px)",
-              }}
-            >
+          <button
+            type="button"
+            onClick={zoomIn}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              background: "rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.2)",
+              color: "white",
+              fontSize: 18,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={zoomOut}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              background: "rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.2)",
+              color: "white",
+              fontSize: 18,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backdropFilter: "blur(4px)",
+            }}
+          >
             −
           </button>
         </div>
@@ -364,14 +455,8 @@ export default function GlobeMap({ points = [] }: GlobeMapProps) {
             }}
             onPolygonClick={(d: any) => {
               const name = d.properties?.NAME || d.properties?.ADMIN;
-              const count = merchantsByCountry[name] || 0;
-              if (count === 0) return;
-              const merchantsInCountry = points
-                .filter((p) => p.country === name)
-                .map((p) => ({ label: p.label ?? name, count: p.count ?? 1 }));
-              setSelectedCountry({ name, count, merchants: merchantsInCountry });
-              const { lat, lng } = points.find((p) => p.country === name) ?? { lat: 0, lng: 0 };
-              globeRef.current?.pointOfView({ lat, lng, altitude: 1.5 }, 800);
+              if (!merchantsByCountry[name]) return;
+              openCountry(name);
             }}
           />
         )}
@@ -389,7 +474,11 @@ export default function GlobeMap({ points = [] }: GlobeMapProps) {
             padding: "14px 18px",
             color: "white",
             fontFamily: "Inter, sans-serif",
-            minWidth: "200px",
+            minWidth: "220px",
+            maxWidth: "300px",
+            maxHeight: "70%",
+            display: "flex",
+            flexDirection: "column",
             zIndex: 10,
           }}
         >
@@ -397,37 +486,47 @@ export default function GlobeMap({ points = [] }: GlobeMapProps) {
             <div style={{ fontWeight: 600, fontSize: "14px" }}>{selectedCountry.name}</div>
             <button
               type="button"
-              onClick={() => {
-                setSelectedCountry(null);
-                if (isMapView) {
-                  setMapZoomScale(MAP_DEFAULT_ZOOM);
-                  setMapCenter(MAP_DEFAULT_CENTER);
-                } else {
-                  setZoomLevel(2.0);
-                  globeRef.current?.pointOfView({ lat: 20, lng: 10, altitude: 2.0 }, 800);
-                }
-              }}
+              onClick={closeCountry}
               style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: "16px" }}
             >
               ×
             </button>
           </div>
-          <div style={{ fontSize: "12px", color: "#1D9E75", marginBottom: "10px" }}>
-            {selectedCountry.count} merchant{selectedCountry.count > 1 ? "s" : ""}
+          <div style={{ fontSize: "12px", color: "#1D9E75", marginBottom: "8px" }}>
+            {selectedCountry.count} merchant{selectedCountry.count === 1 ? "" : "s"} ·{" "}
+            {selectedCountry.places.length} place{selectedCountry.places.length === 1 ? "" : "s"}
           </div>
-          {selectedCountry.merchants.map((m, i) => (
-            <div
-              key={i}
-              style={{
-                fontSize: "12px",
-                padding: "6px 0",
-                borderTop: "1px solid rgba(255,255,255,0.08)",
-                color: "rgba(255,255,255,0.8)",
-              }}
-            >
-              {m.label}
-            </div>
-          ))}
+          <div
+            className="country-places-scroll"
+            style={{
+              overflowY: "auto",
+              flex: 1,
+              minHeight: 0,
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+            }}
+          >
+            {selectedCountry.places.map((place, i) => (
+              <div
+                key={`${place.label}-${i}`}
+                style={{
+                  fontSize: "12px",
+                  padding: "6px 0",
+                  borderTop: "1px solid rgba(255,255,255,0.08)",
+                  color: "rgba(255,255,255,0.8)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <span>{place.label}</span>
+                <span style={{ color: "#1D9E75", fontFamily: "monospace", flexShrink: 0 }}>{place.count}</span>
+              </div>
+            ))}
+          </div>
+          <style>{`
+            .country-places-scroll::-webkit-scrollbar { display: none; }
+          `}</style>
         </div>
       )}
     </div>

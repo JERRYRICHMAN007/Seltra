@@ -7,6 +7,8 @@ import { PageHeader, Card, MetricCard } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { formatCompact, shortDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 
 export const Route = createFileRoute("/_app/merchants/success")({
   head: () => ({ meta: [{ title: "Merchant Success — Seltra Ops" }] }),
@@ -106,8 +108,7 @@ function MerchantSuccessPage() {
     () =>
       merchants
         .filter((m) => m.onboarded_at)
-        .sort((a, b) => new Date(b.onboarded_at!).getTime() - new Date(a.onboarded_at!).getTime())
-        .slice(0, 3),
+        .sort((a, b) => new Date(b.onboarded_at!).getTime() - new Date(a.onboarded_at!).getTime()),
     [merchants],
   );
 
@@ -125,6 +126,9 @@ function MerchantSuccessPage() {
       }))
       .sort((a, b) => b.daysSinceOnboarded - a.daysSinceOnboarded);
   }, [merchants]);
+
+  const onboardedPagination = useClientPagination(recentOnboarded, { pageSize: 5 });
+  const attentionPagination = useClientPagination(needsAttention, { pageSize: 5 });
 
   return (
     <div className="space-y-6">
@@ -179,7 +183,7 @@ function MerchantSuccessPage() {
 
         <Card title="Recent onboarding activity">
           <div className="space-y-4">
-            {recentOnboarded.map((merchant) => (
+            {onboardedPagination.pageItems.map((merchant) => (
               <div key={merchant.id} className="flex items-start justify-between gap-4 border-b border-border pb-3 last:border-0 last:pb-0">
                 <div className="min-w-0">
                   <div className="font-medium text-navy truncate">{merchant.name}</div>
@@ -195,12 +199,24 @@ function MerchantSuccessPage() {
               <p className="text-xs text-muted-foreground">No merchants onboarded yet.</p>
             )}
           </div>
+          {recentOnboarded.length > 0 && (
+            <ListPagination
+              page={onboardedPagination.page}
+              totalPages={onboardedPagination.totalPages}
+              totalItems={onboardedPagination.totalItems}
+              pageSize={onboardedPagination.pageSize}
+              onPageChange={onboardedPagination.setPage}
+              itemLabel="merchants"
+              compact
+              className="pt-3 mt-2"
+            />
+          )}
         </Card>
       </div>
 
       <Card title="Needs attention">
         <div className="space-y-4">
-          {needsAttention.map((merchant) => (
+          {attentionPagination.pageItems.map((merchant) => (
             <div
               key={merchant.id}
               className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4 last:border-0 last:pb-0"
@@ -229,6 +245,18 @@ function MerchantSuccessPage() {
             </p>
           )}
         </div>
+        {needsAttention.length > 0 && (
+          <ListPagination
+            page={attentionPagination.page}
+            totalPages={attentionPagination.totalPages}
+            totalItems={attentionPagination.totalItems}
+            pageSize={attentionPagination.pageSize}
+            onPageChange={attentionPagination.setPage}
+            itemLabel="merchants"
+            compact
+            className="pt-3 mt-2"
+          />
+        )}
       </Card>
     </div>
   );

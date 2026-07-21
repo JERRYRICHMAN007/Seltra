@@ -29,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListPagination } from "@/components/list-pagination";
 import {
   Select,
   SelectContent,
@@ -338,30 +339,15 @@ function MerchantsPage() {
         {!isLoading && !merchantRows.length && (
           <div className="py-8 text-center text-xs text-muted-foreground">No merchants found</div>
         )}
-        {!isLoading && resolvedResult && resolvedResult.totalPages > 1 && (
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">
-              Page {resolvedResult.page} of {resolvedResult.totalPages} · {resolvedResult.total} merchants
-            </span>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={page >= resolvedResult.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+        {!isLoading && resolvedResult && (
+          <ListPagination
+            page={resolvedResult.page}
+            totalPages={resolvedResult.totalPages}
+            totalItems={resolvedResult.total}
+            pageSize={resolvedResult.pageSize}
+            onPageChange={setPage}
+            itemLabel="merchants"
+          />
         )}
       </Card>
     </div>

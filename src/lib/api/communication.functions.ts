@@ -80,9 +80,11 @@ function unwrapContact(payload: unknown): SeltraMessagingContact | null {
 
 async function fetchMessagingContacts(): Promise<MessagingAudienceItem[]> {
   const payload = await seltraInternalFetch<unknown>("/internal/ops/merchants/messaging");
-  return unwrapContactList(payload)
-    .filter((c) => Boolean(c?.id))
-    .map(toAudienceItem);
+  return dedupeAudienceById(
+    unwrapContactList(payload)
+      .filter((c) => Boolean(c?.id))
+      .map(toAudienceItem),
+  );
 }
 
 async function fetchMessagingContactById(id: string): Promise<MessagingAudienceItem | null> {
@@ -98,24 +100,36 @@ export const listMessagingAudience = createServerFn({ method: "GET" }).handler(
   async (): Promise<MessagingAudienceItem[]> => fetchMessagingContacts(),
 );
 
+function dedupeAudienceById(items: MessagingAudienceItem[]): MessagingAudienceItem[] {
+  const map = new Map<string, MessagingAudienceItem>();
+  for (const item of items) {
+    if (!map.has(item.id)) map.set(item.id, item);
+  }
+  return Array.from(map.values());
+}
+
 async function resolveContactsByIds(ids: string[]): Promise<MessagingAudienceItem[]> {
-  if (!ids.length) return [];
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  if (!uniqueIds.length) return [];
+
+  const wanted = new Set(uniqueIds);
 
   // Prefer list endpoint (one round trip), then filter — fall back to per-id if needed.
   try {
-    const all = await fetchMessagingContacts();
-    const wanted = new Set(ids);
+    const all = dedupeAudienceById(await fetchMessagingContacts());
     const matched = all.filter((c) => wanted.has(c.id));
-    if (matched.length) return matched;
+    if (matched.length) return dedupeAudienceById(matched);
   } catch {
     // fall through to per-id
   }
 
-  const settled = await Promise.allSettled(ids.map((id) => fetchMessagingContactById(id)));
-  return settled
-    .filter((r): r is PromiseFulfilledResult<MessagingAudienceItem | null> => r.status === "fulfilled")
-    .map((r) => r.value)
-    .filter((c): c is MessagingAudienceItem => Boolean(c));
+  const settled = await Promise.allSettled(uniqueIds.map((id) => fetchMessagingContactById(id)));
+  return dedupeAudienceById(
+    settled
+      .filter((r): r is PromiseFulfilledResult<MessagingAudienceItem | null> => r.status === "fulfilled")
+      .map((r) => r.value)
+      .filter((c): c is MessagingAudienceItem => Boolean(c)),
+  );
 }
 
 async function resolveEmailRecipients(input: {
@@ -154,77 +168,103 @@ async function resolveSmsRecipients(input: {
   return Array.from(map.values());
 }
 
+/** Collapse duplicate confirm/send requests (double-click, slow network retry). */
+const inFlightSends = new Map<string, Promise<SendMessagingResult>>();
+
+function runIdempotentSend(
+  idempotencyKey: string | undefined,
+  execute: () => Promise<SendMessagingResult>,
+): Promise<SendMessagingResult> {
+  const key = idempotencyKey?.trim();
+  if (!key) return execute();
+
+  const existing = inFlightSends.get(key);
+  if (existing) return existing;
+
+  const promise = execute().finally(() => {
+    inFlightSends.delete(key);
+  });
+  inFlightSends.set(key, promise);
+  return promise;
+}
+
 const emailSendSchema = z.object({
   scope: z.enum(["all", "selected"]),
   recipientIds: z.array(z.string()).default([]),
   sourceType: z.enum(["application", "tenant", "mixed"]).default("application"),
   title: z.string().min(1),
   body: z.string().min(1),
+  idempotencyKey: z.string().uuid().optional(),
 });
 
 const smsSendSchema = z.object({
   scope: z.enum(["all", "selected"]),
   recipientIds: z.array(z.string()).default([]),
   body: z.string().min(1),
+  idempotencyKey: z.string().uuid().optional(),
 });
 
 export const sendOpsEmail = createServerFn({ method: "POST" })
   .inputValidator(emailSendSchema)
   .handler(async ({ data }): Promise<SendMessagingResult> => {
-    if (data.scope === "selected" && !data.recipientIds.length) {
-      throw new Error("Select at least one recipient");
-    }
+    return runIdempotentSend(data.idempotencyKey, async () => {
+      if (data.scope === "selected" && !data.recipientIds.length) {
+        throw new Error("Select at least one recipient");
+      }
 
-    const recipients = await resolveEmailRecipients({
-      scope: data.scope,
-      recipientIds: data.recipientIds,
+      const recipients = await resolveEmailRecipients({
+        scope: data.scope,
+        recipientIds: data.recipientIds,
+      });
+
+      if (!recipients.length) throw new Error("No valid email recipients resolved");
+
+      const html = buildOpsMessageEmail({ title: data.title.trim(), body: data.body.trim() });
+      const result = await sendEmailsViaResend({
+        recipients,
+        subject: data.title.trim(),
+        html,
+        text: data.body.trim(),
+      });
+
+      return {
+        sent: result.sent,
+        failed: result.failed,
+        recipientCount: recipients.length,
+        results: result.results,
+      };
     });
-
-    if (!recipients.length) throw new Error("No valid email recipients resolved");
-
-    const html = buildOpsMessageEmail({ title: data.title.trim(), body: data.body.trim() });
-    const result = await sendEmailsViaResend({
-      recipients,
-      subject: data.title.trim(),
-      html,
-      text: data.body.trim(),
-    });
-
-    return {
-      sent: result.sent,
-      failed: result.failed,
-      recipientCount: recipients.length,
-      results: result.results,
-    };
   });
 
 export const sendOpsSms = createServerFn({ method: "POST" })
   .inputValidator(smsSendSchema)
   .handler(async ({ data }): Promise<SendMessagingResult> => {
-    if (data.scope === "selected" && !data.recipientIds.length) {
-      throw new Error("Select at least one recipient");
-    }
+    return runIdempotentSend(data.idempotencyKey, async () => {
+      if (data.scope === "selected" && !data.recipientIds.length) {
+        throw new Error("Select at least one recipient");
+      }
 
-    const recipients = await resolveSmsRecipients({
-      scope: data.scope,
-      recipientIds: data.recipientIds,
+      const recipients = await resolveSmsRecipients({
+        scope: data.scope,
+        recipientIds: data.recipientIds,
+      });
+
+      if (!recipients.length) {
+        throw new Error("No SMS-eligible recipients — contacts with phone numbers only");
+      }
+
+      const result = await sendSmsViaMoolre({
+        recipients,
+        message: data.body.trim(),
+      });
+
+      return {
+        sent: result.sent,
+        failed: result.failed,
+        recipientCount: recipients.length,
+        results: result.results,
+      };
     });
-
-    if (!recipients.length) {
-      throw new Error("No SMS-eligible recipients — contacts with phone numbers only");
-    }
-
-    const result = await sendSmsViaMoolre({
-      recipients,
-      message: data.body.trim(),
-    });
-
-    return {
-      sent: result.sent,
-      failed: result.failed,
-      recipientCount: recipients.length,
-      results: result.results,
-    };
   });
 
 /** Preview how many recipients a send would hit (server-resolved from Seltra API). */

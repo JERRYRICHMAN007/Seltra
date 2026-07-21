@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, MetricCard, StatusBadge, Card } from "@/components/ui-bits";
 import { formatGHS, shortDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 
 export const Route = createFileRoute("/_app/orders")({
   head: () => ({ meta: [{ title: "Orders — Seltra Ops" }] }),
@@ -24,6 +26,15 @@ function OrdersPage() {
     failed: orders.filter((o: any) => o.status === "failed").length,
     gmv: orders.filter((o: any) => o.status === "paid").reduce((s: number, o: any) => s + Number(o.total_amount), 0),
   };
+
+  const {
+    page,
+    setPage,
+    pageItems: orderPageItems,
+    totalPages,
+    totalItems,
+    pageSize,
+  } = useClientPagination(orders, { pageSize: 10 });
 
   return (
     <div className="space-y-6">
@@ -46,7 +57,7 @@ function OrdersPage() {
               </tr>
             </thead>
             <tbody>
-              {orders.map((o: any) => (
+              {orderPageItems.map((o: any) => (
                 <tr key={o.id} className="border-b border-border hover:bg-surface-muted/50">
                   <td className="py-3 pr-4 font-mono text-xs text-muted-foreground">{o.id.slice(0, 8)}</td>
                   <td className="py-3 pr-4 text-navy">{o.merchants?.name ?? "—"}</td>
@@ -61,6 +72,16 @@ function OrdersPage() {
             </tbody>
           </table>
         </div>
+        {!isLoading && (
+          <ListPagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            itemLabel="orders"
+          />
+        )}
       </Card>
     </div>
   );

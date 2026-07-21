@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Globe from "react-globe.gl";
 import * as d3 from "d3";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 
 export type GlobePoint = {
   lat: number;
@@ -79,6 +81,92 @@ function buildSelection(
       count: p.count ?? 1,
     })),
   };
+}
+
+function CountryPlacesPanel({
+  selection,
+  onClose,
+}: {
+  selection: CountrySelection;
+  onClose: () => void;
+}) {
+  const {
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    pageSize,
+  } = useClientPagination(selection.places, {
+    pageSize: 6,
+    resetDeps: [selection.name, selection.places.length],
+  });
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: "16px",
+        left: "16px",
+        background: "rgba(10,15,30,0.92)",
+        border: "1px solid rgba(29,158,117,0.4)",
+        borderRadius: "12px",
+        padding: "14px 18px",
+        color: "white",
+        fontFamily: "Inter, sans-serif",
+        minWidth: "220px",
+        maxWidth: "300px",
+        display: "flex",
+        flexDirection: "column",
+        zIndex: 10,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+        <div style={{ fontWeight: 600, fontSize: "14px" }}>{selection.name}</div>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: "16px" }}
+        >
+          ×
+        </button>
+      </div>
+      <div style={{ fontSize: "12px", color: "#1D9E75", marginBottom: "8px" }}>
+        {selection.count} merchant{selection.count === 1 ? "" : "s"} ·{" "}
+        {selection.places.length} place{selection.places.length === 1 ? "" : "s"}
+      </div>
+      <div>
+        {pageItems.map((place, i) => (
+          <div
+            key={`${place.label}-${i}`}
+            style={{
+              fontSize: "12px",
+              padding: "6px 0",
+              borderTop: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.8)",
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <span>{place.label}</span>
+            <span style={{ color: "#1D9E75", fontFamily: "monospace", flexShrink: 0 }}>{place.count}</span>
+          </div>
+        ))}
+      </div>
+      <ListPagination
+        page={page}
+        totalPages={totalPages}
+        totalItems={totalItems}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        itemLabel="places"
+        compact
+        tone="dark"
+        className="pt-3 mt-1 flex-col gap-2 sm:flex-col sm:items-stretch"
+      />
+    </div>
+  );
 }
 
 export default function GlobeMap({
@@ -463,71 +551,7 @@ export default function GlobeMap({
       </div>
 
       {selectedCountry && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: "16px",
-            left: "16px",
-            background: "rgba(10,15,30,0.92)",
-            border: "1px solid rgba(29,158,117,0.4)",
-            borderRadius: "12px",
-            padding: "14px 18px",
-            color: "white",
-            fontFamily: "Inter, sans-serif",
-            minWidth: "220px",
-            maxWidth: "300px",
-            maxHeight: "70%",
-            display: "flex",
-            flexDirection: "column",
-            zIndex: 10,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-            <div style={{ fontWeight: 600, fontSize: "14px" }}>{selectedCountry.name}</div>
-            <button
-              type="button"
-              onClick={closeCountry}
-              style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: "16px" }}
-            >
-              ×
-            </button>
-          </div>
-          <div style={{ fontSize: "12px", color: "#1D9E75", marginBottom: "8px" }}>
-            {selectedCountry.count} merchant{selectedCountry.count === 1 ? "" : "s"} ·{" "}
-            {selectedCountry.places.length} place{selectedCountry.places.length === 1 ? "" : "s"}
-          </div>
-          <div
-            className="country-places-scroll"
-            style={{
-              overflowY: "auto",
-              flex: 1,
-              minHeight: 0,
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
-            }}
-          >
-            {selectedCountry.places.map((place, i) => (
-              <div
-                key={`${place.label}-${i}`}
-                style={{
-                  fontSize: "12px",
-                  padding: "6px 0",
-                  borderTop: "1px solid rgba(255,255,255,0.08)",
-                  color: "rgba(255,255,255,0.8)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 12,
-                }}
-              >
-                <span>{place.label}</span>
-                <span style={{ color: "#1D9E75", fontFamily: "monospace", flexShrink: 0 }}>{place.count}</span>
-              </div>
-            ))}
-          </div>
-          <style>{`
-            .country-places-scroll::-webkit-scrollbar { display: none; }
-          `}</style>
-        </div>
+        <CountryPlacesPanel selection={selectedCountry} onClose={closeCountry} />
       )}
     </div>
   );

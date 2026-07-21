@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/select";
 import { formatNumber, shortDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 
 export const Route = createFileRoute("/_app/api-monitor")({
   head: () => ({ meta: [{ title: "API Monitor — Seltra Ops" }] }),
@@ -152,6 +154,18 @@ function ApiMonitorPage() {
     return rows;
   }, [events, search, methodFilter, statusFilter]);
 
+  const {
+    page,
+    setPage,
+    pageItems: eventPageItems,
+    totalPages,
+    totalItems,
+    pageSize,
+  } = useClientPagination(filteredEvents, {
+    pageSize: 10,
+    resetDeps: [search, methodFilter, statusFilter],
+  });
+
   const isLoading = healthLoading || eventsLoading;
 
   return (
@@ -267,7 +281,7 @@ function ApiMonitorPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredEvents.map((event) => (
+            {eventPageItems.map((event) => (
               <tr key={event.id} className="border-b border-border hover:bg-surface-muted/50">
                 <td className="py-3 pr-4">
                   <span
@@ -295,6 +309,17 @@ function ApiMonitorPage() {
             )}
           </tbody>
         </table>
+        {!isLoading && (
+          <ListPagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            itemLabel="events"
+            className="mt-4"
+          />
+        )}
       </Card>
     </div>
   );

@@ -17,6 +17,8 @@ import { LineChart, Line, BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tool
 import { Suspense, lazy, useMemo, useState } from "react";
 import type { GlobePoint } from "@/components/GlobeMap";
 import { ClientOnly } from "@/components/client-only";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 
 const GlobeMap = lazy(() => import("@/components/GlobeMap"));
 
@@ -187,6 +189,24 @@ function DashboardPage() {
     if (data?.apps.length) return recentApplicationsFromSupabase(data.apps);
     return [];
   }, [recentApplications, data?.apps]);
+
+  const {
+    page: eventsPage,
+    setPage: setEventsPage,
+    pageItems: eventPageItems,
+    totalPages: eventsTotalPages,
+    totalItems: eventsTotalItems,
+    pageSize: eventsPageSize,
+  } = useClientPagination(recentEventRows, { pageSize: 8 });
+
+  const {
+    page: applicationsPage,
+    setPage: setApplicationsPage,
+    pageItems: applicationPageItems,
+    totalPages: applicationsTotalPages,
+    totalItems: applicationsTotalItems,
+    pageSize: applicationsPageSize,
+  } = useClientPagination(applicationRows, { pageSize: 5 });
 
   const globeData = useMemo(
     () => (resolvedFootprint ? footprintToGlobePoints(resolvedFootprint) : []),
@@ -440,11 +460,11 @@ function DashboardPage() {
         </Card>
 
         <Card title="Recent events" className="lg:col-span-1">
-          <div className="space-y-2 max-h-64 overflow-y-auto">
+          <div className="space-y-2">
             {recentEventsLoading && !recentEventRows.length ? (
               <Skeleton className="h-32 w-full rounded-lg" />
             ) : (
-              recentEventRows.slice(0, 10).map((e) => (
+              eventPageItems.map((e) => (
                 <div key={e.id} className="text-xs flex items-center gap-2">
                   <div className="h-1.5 w-1.5 rounded-full bg-primary" />
                   <span className="font-mono text-navy">{e.type}</span>
@@ -459,6 +479,18 @@ function DashboardPage() {
               <div className="text-xs text-muted-foreground">No events yet</div>
             )}
           </div>
+          {!recentEventsLoading && recentEventRows.length > 0 && (
+            <ListPagination
+              page={eventsPage}
+              totalPages={eventsTotalPages}
+              totalItems={eventsTotalItems}
+              pageSize={eventsPageSize}
+              onPageChange={setEventsPage}
+              itemLabel="events"
+              compact
+              className="pt-3 mt-2"
+            />
+          )}
         </Card>
 
         <Card title="System status">
@@ -493,7 +525,7 @@ function DashboardPage() {
           {recentApplicationsLoading && !applicationRows.length ? (
             <Skeleton className="h-32 w-full rounded-lg" />
           ) : (
-            applicationRows.map((a) => (
+            applicationPageItems.map((a) => (
               <div key={a.id} className="flex items-center justify-between text-sm py-2 border-b border-border last:border-0">
                 <div>
                   <div className="font-medium text-navy">
@@ -510,6 +542,18 @@ function DashboardPage() {
           )}
           {!recentApplicationsLoading && !applicationRows.length && (
             <div className="text-xs text-muted-foreground">No pending applications</div>
+          )}
+          {!recentApplicationsLoading && applicationRows.length > 0 && (
+            <ListPagination
+              page={applicationsPage}
+              totalPages={applicationsTotalPages}
+              totalItems={applicationsTotalItems}
+              pageSize={applicationsPageSize}
+              onPageChange={setApplicationsPage}
+              itemLabel="applications"
+              compact
+              className="pt-3 mt-2"
+            />
           )}
         </div>
       </Card>

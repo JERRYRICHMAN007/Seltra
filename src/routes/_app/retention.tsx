@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, MetricCard, StatusBadge, Card } from "@/components/ui-bits";
 import { formatGHS, timeAgo } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 
 export const Route = createFileRoute("/_app/retention")({
   head: () => ({ meta: [{ title: "Retention — Seltra Ops" }] }),
@@ -197,6 +199,15 @@ function RetentionPage() {
     };
   });
 
+  const {
+    page,
+    setPage,
+    pageItems: merchantPageItems,
+    totalPages,
+    totalItems,
+    pageSize,
+  } = useClientPagination(merchantRows, { pageSize: 10 });
+
   return (
     <div className="space-y-6">
       <PageHeader title="Retention" subtitle="Merchant health, churn risk, and engagement signals" />
@@ -243,7 +254,7 @@ function RetentionPage() {
               </tr>
             </thead>
             <tbody>
-              {merchantRows.map((m) => (
+              {merchantPageItems.map((m) => (
                 <tr key={m.id} className="border-b border-border hover:bg-surface-muted/50">
                   <td className="py-3 pr-4">
                     <div className="flex items-center gap-2.5">
@@ -274,6 +285,16 @@ function RetentionPage() {
             </tbody>
           </table>
         </div>
+        {!isLoading && (
+          <ListPagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            itemLabel="merchants"
+          />
+        )}
       </Card>
     </div>
   );

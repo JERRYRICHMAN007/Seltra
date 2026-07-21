@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Card, MetricCard } from "@/components/ui-bits";
 import { formatCompact, timeAgo } from "@/lib/format";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 
 export const Route = createFileRoute("/_app/ai")({
   head: () => ({ meta: [{ title: "AI & Agents — Seltra Ops" }] }),
@@ -26,6 +28,15 @@ function AgentsPage() {
   const successRate = inv.length ? Math.round((inv.filter((i:any)=>i.success).length / inv.length) * 100) : 0;
 
   const activityByHour = Array.from({ length: 24 }, (_, h) => ({ hour: `${h}:00`, n: inv.filter((i:any)=>new Date(i.created_at).getHours()===h).length }));
+
+  const {
+    page,
+    setPage,
+    pageItems: invocationPageItems,
+    totalPages,
+    totalItems,
+    pageSize,
+  } = useClientPagination(inv, { pageSize: 10 });
 
   return (
     <div className="space-y-6">
@@ -63,7 +74,7 @@ function AgentsPage() {
               </tr>
             </thead>
             <tbody>
-              {inv.map((i:any)=> (
+              {invocationPageItems.map((i:any)=> (
                 <tr key={i.id} className="border-b border-border hover:bg-surface-muted/50">
                   <td className="py-3 pr-4">{i.agent_name}</td>
                   <td className="py-3 pr-4 font-mono">{i.latency}ms</td>
@@ -74,6 +85,15 @@ function AgentsPage() {
             </tbody>
           </table>
         </div>
+        <ListPagination
+          page={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          itemLabel="invocations"
+          className="mt-4"
+        />
       </Card>
     </div>
   );

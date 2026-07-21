@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Mail, MessageSquare, Search, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -18,6 +18,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 import {
   Dialog,
   DialogContent,
@@ -169,6 +171,8 @@ function EmailModal({
   const [body, setBody] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
+  const [sendIdempotencyKey, setSendIdempotencyKey] = useState<string | null>(null);
+  const sendLockedRef = useRef(false);
 
   const emailPool = useMemo(() => audience.filter((a) => Boolean(a.email)), [audience]);
 
@@ -192,6 +196,8 @@ function EmailModal({
       setBody("");
       setConfirmOpen(false);
       setPreviewCount(null);
+      setSendIdempotencyKey(null);
+      sendLockedRef.current = false;
     }
   }, [open]);
 
@@ -207,29 +213,44 @@ function EmailModal({
       }),
     onSuccess: (data) => {
       setPreviewCount(data.count);
+      setSendIdempotencyKey(crypto.randomUUID());
+      sendLockedRef.current = false;
       setConfirmOpen(true);
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
   const sendMutation = useMutation({
-    mutationFn: () =>
-      sendOpsEmail({
+    mutationFn: () => {
+      if (!sendIdempotencyKey) throw new Error("Missing send token — close and try again");
+      return sendOpsEmail({
         data: {
           scope,
           recipientIds: scope === "selected" ? Array.from(selectedIds) : [],
           sourceType: "application",
           title: title.trim(),
           body: body.trim(),
+          idempotencyKey: sendIdempotencyKey,
         },
-      }),
+      });
+    },
     onSuccess: (result) => {
       toast.success(`Email sent to ${result.sent} of ${result.recipientCount}`);
       setConfirmOpen(false);
+      sendLockedRef.current = false;
       onSent(result);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      sendLockedRef.current = false;
+      toast.error(err.message);
+    },
   });
+
+  function confirmSendEmail() {
+    if (sendLockedRef.current || sendMutation.isPending || !sendIdempotencyKey) return;
+    sendLockedRef.current = true;
+    sendMutation.mutate();
+  }
 
   function requestSend() {
     if (!title.trim()) return toast.error("Title is required");
@@ -316,7 +337,7 @@ function EmailModal({
         count={previewCount ?? 0}
         channel="email"
         pending={sendMutation.isPending}
-        onConfirm={() => sendMutation.mutate()}
+        onConfirm={confirmSendEmail}
       />
     </>
   );
@@ -341,6 +362,8 @@ function SmsModal({
   const [body, setBody] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
+  const [sendIdempotencyKey, setSendIdempotencyKey] = useState<string | null>(null);
+  const sendLockedRef = useRef(false);
 
   const smsPool = audience;
 
@@ -363,6 +386,8 @@ function SmsModal({
       setBody("");
       setConfirmOpen(false);
       setPreviewCount(null);
+      setSendIdempotencyKey(null);
+      sendLockedRef.current = false;
     }
   }, [open]);
 
@@ -377,27 +402,42 @@ function SmsModal({
       }),
     onSuccess: (data) => {
       setPreviewCount(data.count);
+      setSendIdempotencyKey(crypto.randomUUID());
+      sendLockedRef.current = false;
       setConfirmOpen(true);
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
   const sendMutation = useMutation({
-    mutationFn: () =>
-      sendOpsSms({
+    mutationFn: () => {
+      if (!sendIdempotencyKey) throw new Error("Missing send token — close and try again");
+      return sendOpsSms({
         data: {
           scope,
           recipientIds: scope === "selected" ? Array.from(selectedIds) : [],
           body: body.trim(),
+          idempotencyKey: sendIdempotencyKey,
         },
-      }),
+      });
+    },
     onSuccess: (result) => {
       toast.success(`SMS sent to ${result.sent} of ${result.recipientCount}`);
       setConfirmOpen(false);
+      sendLockedRef.current = false;
       onSent(result);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      sendLockedRef.current = false;
+      toast.error(err.message);
+    },
   });
+
+  function confirmSendSms() {
+    if (sendLockedRef.current || sendMutation.isPending || !sendIdempotencyKey) return;
+    sendLockedRef.current = true;
+    sendMutation.mutate();
+  }
 
   function requestSend() {
     if (!body.trim()) return toast.error("Message body is required");
@@ -480,7 +520,7 @@ function SmsModal({
         count={previewCount ?? 0}
         channel="sms"
         pending={sendMutation.isPending}
-        onConfirm={() => sendMutation.mutate()}
+        onConfirm={confirmSendSms}
       />
     </>
   );
@@ -509,6 +549,15 @@ function RecipientScope({
   onSelectAll: () => void;
   mode: "email" | "sms";
 }) {
+  const {
+    page,
+    setPage,
+    pageItems,
+    totalPages,
+    totalItems,
+    pageSize,
+  } = useClientPagination(items, { pageSize: 8, resetDeps: [search, items.length] });
+
   return (
     <div className="space-y-3">
       <div className="flex gap-2">
@@ -546,7 +595,7 @@ function RecipientScope({
               All shown
             </Button>
           </div>
-          <div className="max-h-48 overflow-y-auto divide-y divide-border">
+          <div className="divide-y divide-border">
             {loading ? (
               <div className="space-y-2 p-3">
                 {Array.from({ length: 4 }).map((_, i) => (
@@ -555,7 +604,7 @@ function RecipientScope({
               </div>
             ) : (
               <>
-                {items.map((item) => {
+                {pageItems.map((item) => {
                   const disabled = mode === "sms" && !item.smsEligible;
                   return (
                     <label
@@ -587,6 +636,18 @@ function RecipientScope({
               </>
             )}
           </div>
+          {!loading && items.length > 0 && (
+            <ListPagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              itemLabel="contacts"
+              compact
+              className="px-3 pb-2 pt-0 border-t-0"
+            />
+          )}
         </div>
       )}
     </div>
@@ -626,7 +687,15 @@ function ConfirmSendDialog({
           <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
           </Button>
-          <Button className="gap-2" disabled={pending || count === 0} onClick={onConfirm}>
+          <Button
+            type="button"
+            className="gap-2"
+            disabled={pending || count === 0}
+            onClick={(e) => {
+              e.preventDefault();
+              onConfirm();
+            }}
+          >
             <Send className="h-4 w-4" />
             {pending ? "Sending…" : `Send to ${count}`}
           </Button>

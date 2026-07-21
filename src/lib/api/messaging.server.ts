@@ -28,6 +28,64 @@ export type SendResultItem = {
   error?: string;
 };
 
+function dedupeEmailRecipients(recipients: EmailRecipient[]): EmailRecipient[] {
+  const map = new Map<string, EmailRecipient>();
+  for (const r of recipients) {
+    const key = r.email.trim().toLowerCase();
+    if (!key) continue;
+    if (!map.has(key)) map.set(key, { email: r.email.trim(), name: r.name });
+  }
+  return Array.from(map.values());
+}
+
+function dedupeSmsRecipients(recipients: SmsRecipient[]): SmsRecipient[] {
+  const map = new Map<string, SmsRecipient>();
+  for (const r of recipients) {
+    const phone = normalizePhone(r.phone);
+    if (!phone) continue;
+    if (!map.has(phone)) map.set(phone, { phone: r.phone, name: r.name });
+  }
+  return Array.from(map.values());
+}
+
+async function sendOneEmailViaResend(input: {
+  recipient: EmailRecipient;
+  subject: string;
+  html: string;
+  text?: string;
+  resendApiKey: string;
+  resendFrom: string;
+}): Promise<SendResultItem> {
+  const { recipient, subject, html, text, resendApiKey, resendFrom } = input;
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: resendFrom,
+        to: [recipient.email],
+        subject,
+        html,
+        ...(text ? { text } : {}),
+      }),
+    });
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => "");
+      return { to: recipient.email, ok: false, error: errBody || `Resend ${response.status}` };
+    }
+    return { to: recipient.email, ok: true };
+  } catch (err) {
+    return {
+      to: recipient.email,
+      ok: false,
+      error: err instanceof Error ? err.message : "Send failed",
+    };
+  }
+}
+
 function escapeHtml(s: string) {
   return s
     .replaceAll("&", "&amp;")
@@ -100,93 +158,23 @@ export async function sendEmailsViaResend(input: {
   const { resendApiKey, resendFrom } = getMessagingConfig();
   if (!resendApiKey) throw new Error("Missing RESEND_API_KEY");
 
+  const recipients = dedupeEmailRecipients(input.recipients);
   const results: SendResultItem[] = [];
   let sent = 0;
   let failed = 0;
 
-  const chunkSize = 50;
-  for (let i = 0; i < input.recipients.length; i += chunkSize) {
-    const chunk = input.recipients.slice(i, i + chunkSize);
-
-    // Prefer batch; fall back to individual sends so one bad address doesn't kill the blast
-    const payload = chunk.map((r) => ({
-      from: resendFrom,
-      to: [r.email],
+  for (const recipient of recipients) {
+    const item = await sendOneEmailViaResend({
+      recipient,
       subject: input.subject,
       html: input.html,
-      ...(input.text ? { text: input.text } : {}),
-    }));
-
-    try {
-      const response = await fetch("https://api.resend.com/emails/batch", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        // Fall back to per-recipient sends
-        for (const r of chunk) {
-          try {
-            const single = await fetch("https://api.resend.com/emails", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${resendApiKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                from: resendFrom,
-                to: [r.email],
-                subject: input.subject,
-                html: input.html,
-                ...(input.text ? { text: input.text } : {}),
-              }),
-            });
-            if (!single.ok) {
-              const errBody = await single.text().catch(() => "");
-              failed += 1;
-              results.push({ to: r.email, ok: false, error: errBody || `Resend ${single.status}` });
-            } else {
-              sent += 1;
-              results.push({ to: r.email, ok: true });
-            }
-          } catch (err) {
-            failed += 1;
-            results.push({ to: r.email, ok: false, error: err instanceof Error ? err.message : "Send failed" });
-          }
-        }
-        continue;
-      }
-
-      const data = (await response.json().catch(() => null)) as
-        | { data?: Array<{ id?: string }>; error?: unknown }
-        | Array<{ id?: string }>
-        | null;
-
-      const items = Array.isArray(data) ? data : data?.data;
-      chunk.forEach((r, index) => {
-        const item = items?.[index];
-        if (item?.id || response.ok) {
-          sent += 1;
-          results.push({ to: r.email, ok: true });
-        } else {
-          failed += 1;
-          results.push({ to: r.email, ok: false, error: "Batch item failed" });
-        }
-      });
-    } catch (err) {
-      for (const r of chunk) {
-        failed += 1;
-        results.push({
-          to: r.email,
-          ok: false,
-          error: err instanceof Error ? err.message : "Batch send failed",
-        });
-      }
-    }
+      text: input.text,
+      resendApiKey,
+      resendFrom,
+    });
+    results.push(item);
+    if (item.ok) sent += 1;
+    else failed += 1;
   }
 
   return { sent, failed, results };
@@ -200,14 +188,17 @@ export async function sendSmsViaMoolre(input: {
   if (!vasKey) throw new Error("Missing VAS_KEY (X-API-VASKEY)");
   if (!moolreSenderId) throw new Error("Missing MOOLRE_SENDER_ID");
 
-  const messages = input.recipients
-    .map((r) => {
+  const uniqueRecipients = dedupeSmsRecipients(input.recipients);
+  const sendId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+  const messages = uniqueRecipients
+    .map((r, index) => {
       const phone = normalizePhone(r.phone);
       if (!phone) return null;
       return {
         recipient: phone,
         message: input.message.slice(0, 480),
-        ref: `ops-${Date.now()}-${phone.slice(-4)}`,
+        ref: `ops-${sendId}-${index}`,
       };
     })
     .filter(Boolean) as Array<{ recipient: string; message: string; ref: string }>;
@@ -215,8 +206,8 @@ export async function sendSmsViaMoolre(input: {
   if (!messages.length) {
     return {
       sent: 0,
-      failed: input.recipients.length,
-      results: input.recipients.map((r) => ({
+      failed: uniqueRecipients.length,
+      results: uniqueRecipients.map((r) => ({
         to: r.phone,
         ok: false,
         error: "Invalid phone number",

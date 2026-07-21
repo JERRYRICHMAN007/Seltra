@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, MetricCard, StatusBadge, Card } from "@/components/ui-bits";
 import { timeAgo } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 
 export const Route = createFileRoute("/_app/features")({
   head: () => ({ meta: [{ title: "Feature Usage — Seltra Ops" }] }),
@@ -88,6 +90,15 @@ function FeaturesPage() {
   const aiAdoption = totalMerchants ? Math.round((withInvocations.size / totalMerchants) * 100) : 0;
   const avgAdoption = ordersAdoption;
 
+  const {
+    page,
+    setPage,
+    pageItems: merchantPageItems,
+    totalPages,
+    totalItems,
+    pageSize,
+  } = useClientPagination(merchants, { pageSize: 10 });
+
   const adoptionFeatures = [
     { label: "Orders API", pct: ordersAdoption },
     { label: "Payments", pct: 80 },
@@ -151,7 +162,7 @@ function FeaturesPage() {
               </tr>
             </thead>
             <tbody>
-              {merchants.map((m: any) => {
+              {merchantPageItems.map((m: any) => {
                 const hasOrders = withOrders.has(m.id);
                 const hasPaid = withPaidOrders.has(m.id);
                 const hasAi = withInvocations.has(m.id);
@@ -188,6 +199,16 @@ function FeaturesPage() {
             </tbody>
           </table>
         </div>
+        {!isLoading && (
+          <ListPagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            itemLabel="merchants"
+          />
+        )}
       </Card>
     </div>
   );

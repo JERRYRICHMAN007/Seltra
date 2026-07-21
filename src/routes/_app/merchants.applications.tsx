@@ -18,6 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { shortDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 import {
   Dialog,
   DialogContent,
@@ -154,6 +156,15 @@ function ApplicationsOnboardingPage() {
 
   const isLoading = applicationsLoading || (applicationsApiFailed && fallbackApplicationsLoading);
 
+  const {
+    page: waitlistPage,
+    setPage: setWaitlistPage,
+    pageItems: waitlistPageItems,
+    totalPages: waitlistTotalPages,
+    totalItems: waitlistTotalItems,
+    pageSize: waitlistPageSize,
+  } = useClientPagination(waitlist, { pageSize: 10, resetDeps: [appSearch, waitlist.length] });
+
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["applications"] });
     queryClient.invalidateQueries({ queryKey: ["merchant_applications"] });
@@ -240,6 +251,7 @@ function ApplicationsOnboardingPage() {
             ))}
           </div>
         ) : (
+        <>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -253,7 +265,7 @@ function ApplicationsOnboardingPage() {
               </tr>
             </thead>
             <tbody>
-              {waitlist.map((app) => {
+              {waitlistPageItems.map((app) => {
                 const isFallbackApp = "full_name" in app;
                 const businessName = isFallbackApp
                   ? (app as Application).business_name || (app as Application).full_name
@@ -355,6 +367,16 @@ function ApplicationsOnboardingPage() {
             </tbody>
           </table>
         </div>
+          <ListPagination
+            page={waitlistPage}
+            totalPages={waitlistTotalPages}
+            totalItems={waitlistTotalItems}
+            pageSize={waitlistPageSize}
+            onPageChange={setWaitlistPage}
+            itemLabel="applications"
+            className="mt-4 px-0"
+          />
+        </>
         )}
       </Card>
 

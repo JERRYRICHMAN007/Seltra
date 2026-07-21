@@ -15,6 +15,8 @@ import {
 import { formatGHS, formatNumber, formatCompact, shortDate, exportCsv } from "@/lib/format";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 
 export const Route = createFileRoute("/_app/payments")({
   head: () => ({ meta: [{ title: "Payments — Seltra Ops" }] }),
@@ -114,6 +116,18 @@ function PaymentsPage() {
       return merchantName.includes(q) || ref.includes(q) || o.id.toLowerCase().includes(q);
     });
   }, [orders, search, statusFilter, dateRange]);
+
+  const {
+    page,
+    setPage,
+    pageItems: transactionPageItems,
+    totalPages,
+    totalItems,
+    pageSize,
+  } = useClientPagination(filteredOrders, {
+    pageSize: 10,
+    resetDeps: [search, statusFilter, dateRange],
+  });
 
   function handleExport() {
     exportCsv(
@@ -240,7 +254,7 @@ function PaymentsPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredOrders.map((o) => (
+            {transactionPageItems.map((o) => (
               <tr key={o.id} className="border-b border-border hover:bg-surface-muted/50">
                 <td className="py-3 pr-4 font-medium text-navy">{o.merchants?.name ?? "—"}</td>
                 <td className="py-3 pr-4 font-mono text-xs text-muted-foreground">{txnRef(o.id)}</td>
@@ -258,6 +272,15 @@ function PaymentsPage() {
             )}
           </tbody>
         </table>
+        <ListPagination
+          page={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          itemLabel="transactions"
+          className="mt-4"
+        />
       </Card>
     </div>
   );

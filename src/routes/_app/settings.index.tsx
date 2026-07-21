@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { shortDate } from "@/lib/format";
+import { ListPagination } from "@/components/list-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 
 export const Route = createFileRoute("/_app/settings/")({
   head: () => ({ meta: [{ title: "Settings — Seltra Ops" }] }),
@@ -108,6 +110,15 @@ function SettingsPage() {
   const role = profile?.role ?? "analyst";
   const email = user?.email ?? profile?.email ?? "—";
   const joinedAt = profile?.created_at ?? user?.created_at ?? null;
+
+  const {
+    page: teamPage,
+    setPage: setTeamPage,
+    pageItems: teamPageItems,
+    totalPages: teamTotalPages,
+    totalItems: teamTotalItems,
+    pageSize: teamPageSize,
+  } = useClientPagination(teamMembers, { pageSize: 8 });
 
   async function handleChangePassword() {
     if (!user?.email) return;
@@ -219,7 +230,7 @@ function SettingsPage() {
             >
               <div className="space-y-3">
                 {teamMembers.length ? (
-                  teamMembers.map((member) => {
+                  teamPageItems.map((member) => {
                     const isCurrentUser = member.id === user?.id || member.email === user?.email;
                     return (
                       <div
@@ -259,6 +270,18 @@ function SettingsPage() {
                   })
                 ) : (
                   <div className="py-8 text-center text-sm text-muted-foreground">No team members found.</div>
+                )}
+                {teamMembers.length > 0 && (
+                  <ListPagination
+                    page={teamPage}
+                    totalPages={teamTotalPages}
+                    totalItems={teamTotalItems}
+                    pageSize={teamPageSize}
+                    onPageChange={setTeamPage}
+                    itemLabel="members"
+                    compact
+                    className="pt-2"
+                  />
                 )}
               </div>
             </Card>

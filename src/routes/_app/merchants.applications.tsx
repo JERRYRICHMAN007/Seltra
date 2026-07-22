@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
   approveApplication,
-  listApplications,
+  listApplicationsForWaitlist,
   rejectApplication,
 } from "@/lib/api/applications.functions";
 import { applicationsFromSupabase, applicationsResponseToResult } from "@/lib/api/applications-mappers";
@@ -117,32 +117,21 @@ function ApplicationsOnboardingPage() {
   const opsActor = user?.email ?? "ops@seltra.co";
 
   const [appSearch, setAppSearch] = useState("");
-  const [waitlistPage, setWaitlistPage] = useState(1);
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [approvalResult, setApprovalResult] = useState<ApproveApplicationResponse | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  useEffect(() => {
-    setWaitlistPage(1);
-  }, [appSearch]);
-
-  const listQuery = useMemo(
-    () => ({
-      search: appSearch.trim() || undefined,
-      page: waitlistPage,
-      pageSize: WAITLIST_PAGE_SIZE,
-    }),
-    [appSearch, waitlistPage],
-  );
+  const waitlistSearch = appSearch.trim() || undefined;
 
   const { data: applicationsResult, isLoading: applicationsLoading, isError: applicationsApiFailed } = useQuery({
-    queryKey: ["applications", listQuery],
+    queryKey: ["applications-waitlist", waitlistSearch],
     staleTime: 1000 * 60 * 2,
     gcTime: 1000 * 60 * 5,
     retry: false,
-    queryFn: () => listApplications({ data: listQuery }).then(applicationsResponseToResult),
+    queryFn: () =>
+      listApplicationsForWaitlist({ data: { search: waitlistSearch } }).then(applicationsResponseToResult),
   });
 
   const { data: fallbackApplications = [], isLoading: fallbackApplicationsLoading } = useQuery({
@@ -162,60 +151,27 @@ function ApplicationsOnboardingPage() {
 
   const applicationRows = applicationsResult?.rows ?? applicationsFromSupabase(fallbackApplications, { search: appSearch }).rows;
 
-  const apiWaitlistRows = useMemo(
+  const waitlistAll = useMemo(
     () => applicationRows.filter((a) => isWaitlistVisible(a.status)),
     [applicationRows],
   );
 
-  const fallbackWaitlistAll = useMemo(() => {
-    if (!applicationsApiFailed) return [];
-    return fallbackApplications
-      .filter((a) => isWaitlistVisible(a.status))
-      .filter((a) => {
-        const q = appSearch.trim().toLowerCase();
-        if (!q) return true;
-        const businessName = a.business_name ?? a.full_name;
-        return (
-          businessName.toLowerCase().includes(q) ||
-          a.full_name.toLowerCase().includes(q) ||
-          a.email?.toLowerCase().includes(q)
-        );
-      });
-  }, [applicationsApiFailed, fallbackApplications, appSearch]);
-
   const isLoading = applicationsLoading || (applicationsApiFailed && fallbackApplicationsLoading);
 
   const {
-    page: fallbackPage,
-    setPage: setFallbackPage,
-    pageItems: fallbackPageItems,
-    totalPages: fallbackTotalPages,
-    totalItems: fallbackTotalItems,
-    pageSize: fallbackPageSize,
-  } = useClientPagination(fallbackWaitlistAll, {
+    page: waitlistPage,
+    setPage: setWaitlistPage,
+    pageItems: tableRows,
+    totalPages: waitlistTotalPages,
+    totalItems: waitlistTotalItems,
+    pageSize: waitlistPageSize,
+  } = useClientPagination(waitlistAll, {
     pageSize: WAITLIST_PAGE_SIZE,
-    resetDeps: [appSearch],
+    resetDeps: [appSearch, waitlistAll.length],
   });
 
-  const tableRows = applicationsApiFailed ? fallbackPageItems : apiWaitlistRows;
-
-  const pagination = applicationsApiFailed
-    ? {
-        page: fallbackPage,
-        totalPages: fallbackTotalPages,
-        totalItems: fallbackTotalItems,
-        pageSize: fallbackPageSize,
-        onPageChange: setFallbackPage,
-      }
-    : {
-        page: applicationsResult?.page ?? waitlistPage,
-        totalPages: Math.max(applicationsResult?.totalPages ?? 1, 1),
-        totalItems: applicationsResult?.total ?? apiWaitlistRows.length,
-        pageSize: applicationsResult?.pageSize ?? WAITLIST_PAGE_SIZE,
-        onPageChange: setWaitlistPage,
-      };
-
   const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["applications-waitlist"] });
     queryClient.invalidateQueries({ queryKey: ["applications"] });
     queryClient.invalidateQueries({ queryKey: ["merchant_applications"] });
     queryClient.invalidateQueries({ queryKey: ["merchants"] });
@@ -418,11 +374,11 @@ function ApplicationsOnboardingPage() {
           </table>
         </div>
           <ListPagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            totalItems={pagination.totalItems}
-            pageSize={pagination.pageSize}
-            onPageChange={pagination.onPageChange}
+            page={waitlistPage}
+            totalPages={waitlistTotalPages}
+            totalItems={waitlistTotalItems}
+            pageSize={waitlistPageSize}
+            onPageChange={setWaitlistPage}
             itemLabel="applications"
             className="mt-4 px-0"
           />

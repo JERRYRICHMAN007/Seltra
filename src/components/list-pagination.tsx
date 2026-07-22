@@ -28,11 +28,13 @@ export function ListPagination({
   tone = "default",
 }: ListPaginationProps) {
   if (totalItems === 0) return null;
-  if (totalPages <= 1 && totalItems <= pageSize) return null;
+  const effectiveTotalPages = Math.max(totalPages, Math.ceil(totalItems / Math.max(pageSize, 1)));
+  if (effectiveTotalPages <= 1 && totalItems <= pageSize) return null;
 
-  const start = (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, totalItems);
-  const pages = getVisiblePageNumbers(page, totalPages);
+  const safePage = Math.min(Math.max(1, page), effectiveTotalPages);
+  const start = (safePage - 1) * pageSize + 1;
+  const end = Math.min(safePage * pageSize, totalItems);
+  const pages = getVisiblePageNumbers(safePage, effectiveTotalPages);
   const btnSize = compact ? "sm" : "default";
   const isDark = tone === "dark";
 
@@ -59,8 +61,8 @@ export function ListPagination({
           variant="outline"
           size={btnSize}
           className={cn("gap-1", compact && "h-8 px-2 text-xs")}
-          disabled={page <= 1}
-          onClick={() => onPageChange(page - 1)}
+          disabled={safePage <= 1}
+          onClick={() => onPageChange(safePage - 1)}
         >
           <ChevronLeft className="h-4 w-4" />
           {!compact && <span>Previous</span>}
@@ -83,14 +85,14 @@ export function ListPagination({
               <Button
                 key={p}
                 type="button"
-                variant={p === page ? "secondary" : "ghost"}
+                variant={p === safePage ? "secondary" : "ghost"}
                 size="icon"
                 className={cn(
                   "h-8 w-8 text-xs font-medium",
-                  p === page && "pointer-events-none",
-                  isDark && p !== page && "text-white/80 hover:bg-white/10 hover:text-white",
+                  p === safePage && "pointer-events-none",
+                  isDark && p !== safePage && "text-white/80 hover:bg-white/10 hover:text-white",
                 )}
-                aria-current={p === page ? "page" : undefined}
+                aria-current={p === safePage ? "page" : undefined}
                 onClick={() => onPageChange(p)}
               >
                 {p}
@@ -104,8 +106,8 @@ export function ListPagination({
           variant="outline"
           size={btnSize}
           className={cn("gap-1", compact && "h-8 px-2 text-xs")}
-          disabled={page >= totalPages}
-          onClick={() => onPageChange(page + 1)}
+          disabled={safePage >= effectiveTotalPages}
+          onClick={() => onPageChange(safePage + 1)}
         >
           {!compact && <span>Next</span>}
           <ChevronRight className="h-4 w-4" />

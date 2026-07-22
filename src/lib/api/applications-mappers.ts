@@ -18,12 +18,19 @@ export function applicationListItemToRow(item: ApplicationListItem): Application
 }
 
 export function applicationsResponseToResult(response: ApplicationsListResponse): ApplicationsListResult {
+  const page = Number(response.page) || 1;
+  const pageSize = Number(response.pageSize) || 10;
+  const total = Number(response.total) || response.data?.length || 0;
+  const totalPages =
+    Number(response.totalPages) ||
+    Math.max(1, Math.ceil(total / Math.max(pageSize, 1)));
+
   return {
-    page: response.page,
-    pageSize: response.pageSize,
-    total: response.total,
-    totalPages: response.totalPages,
-    rows: response.data.map(applicationListItemToRow),
+    page,
+    pageSize,
+    total,
+    totalPages,
+    rows: (response.data ?? []).map(applicationListItemToRow),
   };
 }
 

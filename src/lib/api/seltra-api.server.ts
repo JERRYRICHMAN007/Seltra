@@ -1,12 +1,19 @@
-import process from "node:process";
+﻿import process from "node:process";
 
-const DEFAULT_SELTRA_API_BASE_URL = "https://seltra-merchant-backend.onrender.com";
+const PRODUCTION_SELTRA_API_BASE_URL = "https://seltra-merchant-backend.onrender.com";
+const LOCAL_SELTRA_API_BASE_URL = "http://localhost:3001";
+
+function defaultSeltraApiBaseUrl() {
+  // Prefer local merchant backend during local Ops development.
+  if (process.env.NODE_ENV !== "production") return LOCAL_SELTRA_API_BASE_URL;
+  return PRODUCTION_SELTRA_API_BASE_URL;
+}
 
 export function getSeltraApiConfig() {
   const baseUrl = (
     process.env.SELTRA_API_BASE_URL ||
     process.env.VITE_SELTRA_API_BASE_URL ||
-    DEFAULT_SELTRA_API_BASE_URL
+    defaultSeltraApiBaseUrl()
   ).replace(/\/$/, "");
 
   const apiKey =
@@ -14,15 +21,26 @@ export function getSeltraApiConfig() {
     process.env.OPS_INTERNAL_API_KEY ||
     "";
 
-  return { baseUrl, apiKey };
+  const opsActor = process.env.OPS_ACTOR || "admin@seltra.co";
+
+  return { baseUrl, apiKey, opsActor };
+}
+
+function opsHeaders(apiKey: string, opsActor: string, init?: RequestInit): HeadersInit {
+  return {
+    Accept: "application/json",
+    "X-Internal-Api-Key": apiKey,
+    "X-Ops-Actor": opsActor,
+    ...init?.headers,
+  };
 }
 
 export async function seltraInternalFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const { baseUrl, apiKey } = getSeltraApiConfig();
+  const { baseUrl, apiKey, opsActor } = getSeltraApiConfig();
 
   if (!apiKey) {
     throw new Error(
-      "Missing SELTRA_INTERNAL_API_KEY (or OPS_INTERNAL_API_KEY). Add it in Vercel → Project Settings → Environment Variables (Production), then redeploy.",
+      "Missing SELTRA_INTERNAL_API_KEY (or OPS_INTERNAL_API_KEY). Add it in .env for local, or Vercel → Environment Variables for production.",
     );
   }
 
@@ -30,11 +48,7 @@ export async function seltraInternalFetch<T>(path: string, init?: RequestInit): 
   try {
     response = await fetch(`${baseUrl}${path}`, {
       ...init,
-      headers: {
-        Accept: "application/json",
-        "X-Internal-Api-Key": apiKey,
-        ...init?.headers,
-      },
+      headers: opsHeaders(apiKey, opsActor, init),
     });
   } catch (err) {
     const reason = err instanceof Error ? err.message : "network error";
@@ -52,11 +66,11 @@ export async function seltraInternalFetch<T>(path: string, init?: RequestInit): 
 }
 
 export async function seltraInternalFetchText(path: string, init?: RequestInit): Promise<string> {
-  const { baseUrl, apiKey } = getSeltraApiConfig();
+  const { baseUrl, apiKey, opsActor } = getSeltraApiConfig();
 
   if (!apiKey) {
     throw new Error(
-      "Missing SELTRA_INTERNAL_API_KEY (or OPS_INTERNAL_API_KEY). Add it in Vercel → Project Settings → Environment Variables (Production), then redeploy.",
+      "Missing SELTRA_INTERNAL_API_KEY (or OPS_INTERNAL_API_KEY). Add it in .env for local, or Vercel → Environment Variables for production.",
     );
   }
 
@@ -65,6 +79,7 @@ export async function seltraInternalFetchText(path: string, init?: RequestInit):
     headers: {
       Accept: "text/csv",
       "X-Internal-Api-Key": apiKey,
+      "X-Ops-Actor": opsActor,
       ...init?.headers,
     },
   });

@@ -4,7 +4,7 @@
   "sideEffects": false,
   "type": "module",
   "engines": {
-    "node": "22.x"
+    "node": "20.x"
   },
   "scripts": {
     "dev": "vite dev",
@@ -94,3 +94,4 @@
     "vite": "^7.3.1"
   }
 }
+

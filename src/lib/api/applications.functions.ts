@@ -89,6 +89,25 @@ export const approveApplication = createServerFn({ method: "POST" })
     }),
   );
 
+export const resendApplicationCredentials = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      id: z.string().min(1),
+      opsActor: z.string().min(1),
+    }),
+  )
+  .handler(async ({ data }): Promise<ApproveApplicationResponse> =>
+    seltraInternalFetch<ApproveApplicationResponse>(
+      `/internal/ops/applications/${data.id}/resend-credentials`,
+      {
+        method: "POST",
+        headers: {
+          "X-Ops-Actor": data.opsActor,
+        },
+      },
+    ),
+  );
+
 export const rejectApplication = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({

@@ -9,6 +9,7 @@ import {
   approveApplication,
   listApplicationsForWaitlist,
   rejectApplication,
+  resendApplicationCredentials,
 } from "@/lib/api/applications.functions";
 import { applicationsFromSupabase, applicationsResponseToResult } from "@/lib/api/applications-mappers";
 import type { ApproveApplicationResponse } from "@/lib/api/applications.types";
@@ -152,15 +153,19 @@ function WaitlistActions({
   status,
   approvePending,
   rejectPending,
+  resendPending,
   onApprove,
   onReject,
+  onResendCredentials,
 }: {
   status: string;
   appId: string;
   approvePending: boolean;
   rejectPending: boolean;
+  resendPending: boolean;
   onApprove: () => void;
   onReject: () => void;
+  onResendCredentials: () => void;
 }) {
   const s = status.toLowerCase();
   const canApprove = s === "pending" || s === "applied" || s === "reviewed";
@@ -173,6 +178,15 @@ function WaitlistActions({
           <span className="pointer-events-none inline-flex shrink-0 select-none items-center rounded-md bg-primary/15 px-2 py-1 text-[11px] font-medium text-primary">
             Onboarded
           </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 px-2 text-xs"
+            disabled={resendPending}
+            onClick={onResendCredentials}
+          >
+            {resendPending ? "Sending…" : "Resend login"}
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -295,27 +309,15 @@ function ApplicationsOnboardingPage() {
   };
 
   const approveMutation = useMutation({
-    mutationFn: async (id: string) => {
-      try {
-        return await approveApplication({ data: { id, opsActor } });
-      } catch {
-        const { error } = await supabase.from("merchant_applications").update({ status: "approved" }).eq("id", id);
-        if (error) throw error;
-        return null;
-      }
-    },
+    mutationFn: async (id: string) => approveApplication({ data: { id, opsActor } }),
     onSuccess: (result) => {
-      if (result) {
-        setApprovalResult(result);
-        toast.success(result.credentialsSent ? "Approved — credentials sent" : "Application approved");
-        setOnboardingStep(3);
-      } else {
-        toast.success("Application approved");
-        setOnboardingStep(2);
-      }
+      setApprovalResult(result);
+      toast.success(result.credentialsSent ? "Approved — credentials sent" : "Application approved");
+      setOnboardingStep(result.credentialsSent ? 3 : 2);
       invalidateAll();
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) =>
+      toast.error(err.message || "Approve failed — Seltra API must create the merchant user before login works"),
   });
 
   const rejectMutation = useMutation({
@@ -339,6 +341,20 @@ function ApplicationsOnboardingPage() {
       invalidateAll();
     },
     onError: (err: Error) => toast.error(err.message),
+  });
+
+  const resendCredentialsMutation = useMutation({
+    mutationFn: async (id: string) => resendApplicationCredentials({ data: { id, opsActor } }),
+    onSuccess: (result) => {
+      toast.success(
+        result.credentialsSent
+          ? `Login emailed to ${result.email} (${result.merchantId})`
+          : `Credentials reset for ${result.merchantId} — email may not have sent`,
+      );
+      setApprovalResult(result);
+      invalidateAll();
+    },
+    onError: (err: Error) => toast.error(err.message || "Could not resend credentials"),
   });
 
   function openRejectDialog(id: string) {
@@ -407,8 +423,10 @@ function ApplicationsOnboardingPage() {
                         appId={row.id}
                         approvePending={approveMutation.isPending}
                         rejectPending={rejectMutation.isPending}
+                        resendPending={resendCredentialsMutation.isPending}
                         onApprove={() => approveMutation.mutate(row.id)}
                         onReject={() => openRejectDialog(row.id)}
+                        onResendCredentials={() => resendCredentialsMutation.mutate(row.id)}
                       />
                     </div>
                   </div>
@@ -471,8 +489,10 @@ function ApplicationsOnboardingPage() {
                         appId={row.id}
                         approvePending={approveMutation.isPending}
                         rejectPending={rejectMutation.isPending}
+                        resendPending={resendCredentialsMutation.isPending}
                         onApprove={() => approveMutation.mutate(row.id)}
                         onReject={() => openRejectDialog(row.id)}
+                        onResendCredentials={() => resendCredentialsMutation.mutate(row.id)}
                       />
                     </td>
                   </tr>

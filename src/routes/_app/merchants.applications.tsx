@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +32,9 @@ import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/_app/merchants/applications")({
   head: () => ({ meta: [{ title: "Applications & Onboarding — Seltra Ops" }] }),
+  validateSearch: (search: Record<string, unknown>): { focus?: string } => ({
+    focus: typeof search.focus === "string" && search.focus.length > 0 ? search.focus : undefined,
+  }),
   component: ApplicationsOnboardingPage,
 });
 
@@ -203,7 +206,9 @@ function WaitlistActions({
 function ApplicationsOnboardingPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { focus: focusId } = Route.useSearch();
   const opsActor = user?.email ?? "ops@seltra.co";
+  const focusRowRef = useRef<HTMLElement | null>(null);
 
   const [appSearch, setAppSearch] = useState("");
   const [onboardingStep, setOnboardingStep] = useState(1);
@@ -246,12 +251,12 @@ function ApplicationsOnboardingPage() {
       return new Date(raw).getTime() || 0;
     };
 
-    // Newest applications at the top
+    // Newest applications at the top; keep a focused row visible even if rejected
     return applicationRows
-      .filter((a) => isWaitlistVisible(a.status))
+      .filter((a) => isWaitlistVisible(a.status) || a.id === focusId)
       .slice()
       .sort((a, b) => appliedTime(b) - appliedTime(a));
-  }, [applicationRows]);
+  }, [applicationRows, focusId]);
 
   const isLoading = applicationsLoading || (applicationsApiFailed && fallbackApplicationsLoading);
 
@@ -264,8 +269,23 @@ function ApplicationsOnboardingPage() {
     pageSize: waitlistPageSize,
   } = useClientPagination(waitlistAll, {
     pageSize: WAITLIST_PAGE_SIZE,
-    resetDeps: [appSearch, waitlistAll.length],
+    resetDeps: [appSearch, waitlistAll.length, focusId],
   });
+
+  useEffect(() => {
+    if (!focusId || !waitlistAll.length) return;
+    const index = waitlistAll.findIndex((app) => normalizeWaitlistRow(app).id === focusId);
+    if (index < 0) return;
+    setWaitlistPage(Math.floor(index / WAITLIST_PAGE_SIZE) + 1);
+  }, [focusId, waitlistAll, setWaitlistPage]);
+
+  useEffect(() => {
+    if (!focusId) return;
+    const timer = window.setTimeout(() => {
+      focusRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [focusId, waitlistPage, tableRows]);
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["applications-waitlist"] });
@@ -359,8 +379,15 @@ function ApplicationsOnboardingPage() {
         <div className="space-y-3 md:hidden">
           {tableRows.map((app) => {
             const row = normalizeWaitlistRow(app);
+            const isFocused = focusId === row.id;
             return (
-              <div key={row.id} className="rounded-lg border border-border bg-surface p-3.5">
+              <div
+                key={row.id}
+                ref={isFocused ? (el) => { focusRowRef.current = el; } : undefined}
+                className={`rounded-lg border bg-surface p-3.5 ${
+                  isFocused ? "border-primary ring-2 ring-primary/30" : "border-border"
+                }`}
+              >
                 <div className="flex items-start gap-3">
                   <MerchantAvatar name={row.businessName} />
                   <div className="min-w-0 flex-1">
@@ -410,8 +437,17 @@ function ApplicationsOnboardingPage() {
             <tbody>
               {tableRows.map((app) => {
                 const row = normalizeWaitlistRow(app);
+                const isFocused = focusId === row.id;
                 return (
-                  <tr key={row.id} className="hover:bg-surface-muted/60">
+                  <tr
+                    key={row.id}
+                    ref={isFocused ? (el) => { focusRowRef.current = el; } : undefined}
+                    className={
+                      isFocused
+                        ? "bg-primary/10 ring-2 ring-inset ring-primary/40"
+                        : "hover:bg-surface-muted/60"
+                    }
+                  >
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-2.5">
                         <MerchantAvatar name={row.businessName} />

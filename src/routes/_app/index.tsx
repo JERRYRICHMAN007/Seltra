@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getDashboardActivitySeries, getDashboardFootprint, getDashboardGmvSeries, getDashboardOverview, getDashboardRecentApplications, getDashboardRecentEvents, getDashboardSystemStatus, getDashboardTopMerchants } from "@/lib/api/dashboard.functions";
@@ -520,7 +520,11 @@ function DashboardPage() {
 
       <Card
         title="Recent applications"
-        action={<Button size="sm" variant="ghost">View all</Button>}
+        action={
+          <Button size="sm" variant="ghost" asChild>
+            <Link to="/merchants/applications">View all</Link>
+          </Button>
+        }
       >
         <div className="space-y-2">
           {recentApplicationsLoading && !applicationRows.length ? (
@@ -536,7 +540,11 @@ function DashboardPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={a.status} />
-                  <Button size="sm" variant="outline">Review</Button>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/merchants/applications" search={{ focus: a.id }}>
+                      Review
+                    </Link>
+                  </Button>
                 </div>
               </div>
             ))

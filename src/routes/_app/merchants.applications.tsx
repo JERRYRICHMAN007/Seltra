@@ -164,25 +164,38 @@ function WaitlistActions({
   const isOnboarded = s === "approved" || s === "onboarded";
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-nowrap items-center gap-1.5">
       {isOnboarded ? (
-        <span className="pointer-events-none inline-flex select-none items-center rounded-md bg-success-soft px-2 py-1 text-xs font-medium text-primary">
-          Onboarded
-        </span>
+        <>
+          <span className="pointer-events-none inline-flex shrink-0 select-none items-center rounded-md bg-primary/15 px-2 py-1 text-[11px] font-medium text-primary">
+            Onboarded
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 shrink-0 px-2 text-xs text-destructive hover:bg-destructive/15 hover:text-destructive"
+            disabled={rejectPending}
+            onClick={onReject}
+          >
+            Reject
+          </Button>
+        </>
       ) : (
-        <Button size="sm" variant="outline" disabled={approvePending || !canApprove} onClick={onApprove}>
-          Approve
-        </Button>
+        <>
+          <Button size="sm" variant="outline" className="h-8 shrink-0" disabled={approvePending || !canApprove} onClick={onApprove}>
+            Approve
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+            disabled={rejectPending}
+            onClick={onReject}
+          >
+            Reject
+          </Button>
+        </>
       )}
-      <Button
-        size="sm"
-        variant="outline"
-        className="border-destructive/40 text-destructive hover:bg-destructive hover:text-white"
-        disabled={rejectPending}
-        onClick={onReject}
-      >
-        Reject
-      </Button>
     </div>
   );
 }
@@ -392,7 +405,7 @@ function ApplicationsOnboardingPage() {
 
         {/* Desktop table */}
         <div className="-mx-4 hidden overflow-x-auto md:mx-0 md:block">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="ops-table w-full min-w-[720px] text-sm">
             <thead>
               <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 <th className="pb-2.5 pr-4 font-medium">Business name</th>
@@ -418,12 +431,14 @@ function ApplicationsOnboardingPage() {
                       <div className="text-foreground">{row.ownerName}</div>
                       <div className="text-xs text-muted-foreground">{row.ownerEmail}</div>
                     </td>
-                    <td className="py-3 pr-4 text-muted-foreground">{row.businessType}</td>
+                    <td className="max-w-[140px] truncate py-3 pr-4 text-muted-foreground" title={row.businessType}>
+                      {row.businessType}
+                    </td>
                     <td className="py-3 pr-4">
                       <StatusBadge status={row.status} />
                     </td>
-                    <td className="py-3 pr-4 text-muted-foreground">{shortDate(row.appliedAt)}</td>
-                    <td className="py-3 pr-4">
+                    <td className="whitespace-nowrap py-3 pr-4 text-muted-foreground">{shortDate(row.appliedAt)}</td>
+                    <td className="py-3 pr-4 whitespace-nowrap">
                       <WaitlistActions
                         status={row.status}
                         appId={row.id}
@@ -453,7 +468,7 @@ function ApplicationsOnboardingPage() {
             pageSize={waitlistPageSize}
             onPageChange={setWaitlistPage}
             itemLabel="applications"
-            className="mt-4 border-t-0 px-0 pt-3"
+            className="px-0"
           />
         </>
         )}

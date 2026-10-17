@@ -248,42 +248,125 @@ function MerchantsPage() {
             ))}
           </div>
         ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <>
+        {/* Mobile cards */}
+        <div className="space-y-3 lg:hidden">
+          {merchantRows.map((m) => (
+            <div key={m.id} className="rounded-lg border border-border bg-surface p-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-foreground">{m.storeName}</div>
+                  <div className="truncate text-xs text-muted-foreground">{m.slug}</div>
+                </div>
+                <StatusBadge status={m.status} />
+              </div>
+              <div className="mt-2 text-sm text-foreground">{m.ownerName}</div>
+              <div className="truncate text-xs text-muted-foreground">{m.ownerEmail}</div>
+              <div className="mt-2 line-clamp-2 text-xs text-muted-foreground" title={m.businessType}>
+                {m.businessType}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span className="font-mono text-foreground">{formatGHS(m.gmv)}</span>
+                <span>{m.orderCount} orders</span>
+                <span>{m.lastActive}</span>
+                <span>Joined {shortDate(m.joinedAt)}</span>
+              </div>
+              <div className="mt-3 flex flex-nowrap items-center gap-2">
+                <Dialog
+                  open={editOpen && selected?.id === m.id}
+                  onOpenChange={(open) => {
+                    setEditOpen(open);
+                    if (!open) setSelected(null);
+                  }}
+                >
+                  <DialogTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8"
+                      onClick={() => {
+                        setSelected(m);
+                        setEditOpen(true);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Edit merchant</DialogTitle>
+                      <DialogDescription>Update merchant store metadata</DialogDescription>
+                    </DialogHeader>
+                    <MerchantEditForm
+                      merchant={m}
+                      opsActor={opsActor}
+                      onSaved={() => {
+                        queryClient.invalidateQueries({ queryKey: ["merchants"] });
+                        queryClient.invalidateQueries({ queryKey: ["merchants-fallback"] });
+                        setEditOpen(false);
+                        setSelected(null);
+                      }}
+                    />
+                  </DialogContent>
+                </Dialog>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                  onClick={() => handleDelete(m)}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="-mx-4 hidden overflow-x-auto lg:mx-0 lg:block">
+          <table className="ops-table w-full min-w-[960px] text-sm">
             <thead>
-              <tr className="text-left text-xs font-mono uppercase tracking-wider text-muted-foreground border-b border-border">
-                <th className="py-2 pr-4">Store</th>
-                <th className="py-2 pr-4">Owner</th>
-                <th className="py-2 pr-4">Type</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2 pr-4 text-right">GMV</th>
-                <th className="py-2 pr-4 text-right">Orders</th>
-                <th className="py-2 pr-4">Last Active</th>
-                <th className="py-2 pr-4">Joined</th>
-                <th className="py-2 pr-4">Actions</th>
+              <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="pb-2.5 pr-4 font-medium">Store</th>
+                <th className="pb-2.5 pr-4 font-medium">Owner</th>
+                <th className="pb-2.5 pr-4 font-medium">Type</th>
+                <th className="pb-2.5 pr-4 font-medium">Status</th>
+                <th className="pb-2.5 pr-4 text-right font-medium">GMV</th>
+                <th className="pb-2.5 pr-4 text-right font-medium">Orders</th>
+                <th className="pb-2.5 pr-4 font-medium">Last Active</th>
+                <th className="pb-2.5 pr-4 font-medium">Joined</th>
+                <th className="pb-2.5 pr-4 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {merchantRows.map((m) => (
-                <tr key={m.id} className="border-b border-border hover:bg-surface-muted/50">
+                <tr key={m.id} className="hover:bg-surface-muted/50">
                   <td className="py-3 pr-4">
-                    <div className="font-medium text-sm text-navy">{m.storeName}</div>
-                    <div className="text-xs text-muted-foreground">{m.slug}</div>
+                    <div className="max-w-[180px] truncate font-medium text-foreground" title={m.storeName}>
+                      {m.storeName}
+                    </div>
+                    <div className="max-w-[180px] truncate text-xs text-muted-foreground" title={m.slug}>
+                      {m.slug}
+                    </div>
                   </td>
                   <td className="py-3 pr-4">
-                    <div className="text-navy">{m.ownerName}</div>
-                    <div className="text-xs text-muted-foreground">{m.ownerEmail}</div>
+                    <div className="truncate text-foreground">{m.ownerName}</div>
+                    <div className="max-w-[180px] truncate text-xs text-muted-foreground" title={m.ownerEmail}>
+                      {m.ownerEmail}
+                    </div>
                   </td>
-                  <td className="py-3 pr-4 text-navy">{m.businessType}</td>
+                  <td className="max-w-[160px] truncate py-3 pr-4 text-muted-foreground" title={m.businessType}>
+                    {m.businessType}
+                  </td>
                   <td className="py-3 pr-4">
                     <StatusBadge status={m.status} />
                   </td>
-                  <td className="py-3 pr-4 text-right font-mono text-navy">{formatGHS(m.gmv)}</td>
-                  <td className="py-3 pr-4 text-right font-mono">{m.orderCount}</td>
-                  <td className="py-3 pr-4 text-muted-foreground">{m.lastActive}</td>
-                  <td className="py-3 pr-4 text-muted-foreground">{shortDate(m.joinedAt)}</td>
-                  <td className="py-3 pr-4">
-                    <div className="flex items-center gap-2">
+                  <td className="whitespace-nowrap py-3 pr-4 text-right font-mono text-foreground">{formatGHS(m.gmv)}</td>
+                  <td className="whitespace-nowrap py-3 pr-4 text-right font-mono">{m.orderCount}</td>
+                  <td className="whitespace-nowrap py-3 pr-4 text-muted-foreground">{m.lastActive}</td>
+                  <td className="whitespace-nowrap py-3 pr-4 text-muted-foreground">{shortDate(m.joinedAt)}</td>
+                  <td className="py-3 pr-4 whitespace-nowrap">
+                    <div className="flex flex-nowrap items-center gap-1.5">
                       <Dialog
                         open={editOpen && selected?.id === m.id}
                         onOpenChange={(open) => {
@@ -295,6 +378,7 @@ function MerchantsPage() {
                           <Button
                             size="sm"
                             variant="outline"
+                            className="h-8"
                             onClick={() => {
                               setSelected(m);
                               setEditOpen(true);
@@ -323,7 +407,7 @@ function MerchantsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-destructive border-destructive hover:bg-destructive hover:text-white"
+                        className="h-8 border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground"
                         onClick={() => handleDelete(m)}
                       >
                         Remove
@@ -335,6 +419,7 @@ function MerchantsPage() {
             </tbody>
           </table>
         </div>
+        </>
         )}
         {!isLoading && !merchantRows.length && (
           <div className="py-8 text-center text-xs text-muted-foreground">No merchants found</div>
@@ -347,6 +432,7 @@ function MerchantsPage() {
             pageSize={resolvedResult.pageSize}
             onPageChange={setPage}
             itemLabel="merchants"
+            className="px-0"
           />
         )}
       </Card>

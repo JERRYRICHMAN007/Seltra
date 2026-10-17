@@ -15,9 +15,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/style.min.css",
+      },
+      {
+        rel: "stylesheet",
+        href: "https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-mono/style.min.css",
+      },
     ],
   }),
   shellComponent: RootShell,
@@ -36,9 +41,14 @@ function RootShell({ children }: { children: ReactNode }) {
   const supabaseConfig = getServerSupabasePublicConfig();
 
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='light')document.documentElement.classList.remove('dark');else document.documentElement.classList.add('dark');}catch(e){}})();`,
+          }}
+        />
         {supabaseConfig ? (
           <script
             dangerouslySetInnerHTML={{
@@ -47,7 +57,7 @@ function RootShell({ children }: { children: ReactNode }) {
           />
         ) : null}
       </head>
-      <body>{children}<Scripts /></body>
+      <body className="font-sans antialiased">{children}<Scripts /></body>
     </html>
   );
 }

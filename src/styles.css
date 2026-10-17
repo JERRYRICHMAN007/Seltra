@@ -5,8 +5,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --font-sans: "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: "Geist", "Geist Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -59,111 +59,146 @@
   --color-chart-5: var(--chart-5);
 }
 
+/* Light fallback — soft Seltra green neutrals */
 :root {
-  /* Light mode — deep neutral ash canvas */
-  --background: oklch(0.97 0.005 160);
-  --foreground: oklch(0.22 0.02 160);
+  --background: oklch(0.97 0.006 155);
+  --foreground: oklch(0.2 0.02 155);
   --surface: oklch(1 0 0);
-  --surface-muted: oklch(0.95 0.008 160);
+  --surface-muted: oklch(0.95 0.01 155);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.02 280);
+  --card-foreground: oklch(0.2 0.02 155);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.02 280);
+  --popover-foreground: oklch(0.2 0.02 155);
 
-  /* Seltra green — aligned with www.seltra.co primary */
-  --primary: oklch(0.58 0.13 160);
+  --primary: oklch(0.62 0.15 155);
   --primary-foreground: oklch(0.99 0 0);
-  --primary-soft: oklch(0.95 0.04 160);
+  --primary-soft: oklch(0.94 0.05 155);
 
-  --navy: oklch(0.24 0.03 160);
+  --navy: oklch(0.22 0.02 155);
 
-  --secondary: oklch(0.94 0.01 160);
-  --secondary-foreground: oklch(0.28 0.03 160);
-  --muted: oklch(0.92 0.01 160);
-  --muted-foreground: oklch(0.48 0.02 160);
-  --accent: oklch(0.95 0.04 160);
-  --accent-foreground: oklch(0.28 0.04 160);
+  --secondary: oklch(0.94 0.01 155);
+  --secondary-foreground: oklch(0.28 0.02 155);
+  --muted: oklch(0.93 0.01 155);
+  --muted-foreground: oklch(0.45 0.02 155);
+  --accent: oklch(0.94 0.04 155);
+  --accent-foreground: oklch(0.28 0.03 155);
 
   --warning: oklch(0.72 0.14 75);
-  --warning-foreground: oklch(0.28 0.04 160);
+  --warning-foreground: oklch(0.28 0.03 155);
   --warning-soft: oklch(0.96 0.05 85);
 
-  --success: oklch(0.58 0.13 160);
-  --success-soft: oklch(0.94 0.05 160);
+  --success: oklch(0.62 0.15 155);
+  --success-soft: oklch(0.94 0.05 155);
 
   --destructive: oklch(0.58 0.2 25);
   --destructive-foreground: oklch(1 0 0);
   --destructive-soft: oklch(0.96 0.04 25);
 
-  --border: oklch(0.88 0.01 160);
-  --input: oklch(0.88 0.01 160);
-  --chart-grid: oklch(0.82 0.01 160);
-  --ring: oklch(0.58 0.13 160);
+  --border: oklch(0.9 0.01 155);
+  --input: oklch(0.9 0.01 155);
+  --chart-grid: oklch(0.86 0.01 155);
+  --ring: oklch(0.62 0.15 155);
 
-  --sidebar: oklch(0.22 0.03 160);
-  --sidebar-foreground: oklch(0.9 0.02 160);
-  --sidebar-muted: oklch(0.68 0.03 160);
-  --sidebar-active: oklch(0.72 0.12 160);
-  --sidebar-active-bg: oklch(0.28 0.04 160);
-  --sidebar-accent: oklch(0.3 0.04 160);
-  --sidebar-accent-foreground: oklch(0.96 0.02 160);
-  --sidebar-border: oklch(0.28 0.03 160);
+  --sidebar: oklch(0.18 0.015 155);
+  --sidebar-foreground: oklch(0.92 0.01 155);
+  --sidebar-muted: oklch(0.65 0.02 155);
+  --sidebar-active: oklch(0.72 0.15 155);
+  --sidebar-active-bg: oklch(0.24 0.03 155);
+  --sidebar-accent: oklch(0.26 0.03 155);
+  --sidebar-accent-foreground: oklch(0.96 0.01 155);
+  --sidebar-border: oklch(0.24 0.02 155);
 
-  --chart-1: oklch(0.58 0.13 160);   /* seltra green */
-  --chart-2: oklch(0.63 0.21 30);    /* coral */
-  --chart-3: oklch(0.78 0.16 70);    /* amber */
-  --chart-4: oklch(0.45 0.12 250);   /* indigo */
-  --chart-5: oklch(0.55 0.1 145);    /* deep green */
+  --chart-1: oklch(0.62 0.15 155);
+  --chart-2: oklch(0.63 0.21 30);
+  --chart-3: oklch(0.78 0.16 70);
+  --chart-4: oklch(0.45 0.12 250);
+  --chart-5: oklch(0.55 0.12 145);
 
-  --radius: 12px;
+  --radius: 10px;
 }
 
+/* Default Ops look — matches Seltra merchant admin dashboard */
 .dark {
-  --background: oklch(0.18 0.04 245);
-  --foreground: oklch(0.96 0.01 220);
-  --surface: oklch(0.22 0.05 245);
-  --surface-muted: oklch(0.25 0.05 245);
-  --card: oklch(0.22 0.05 245);
-  --card-foreground: oklch(0.96 0.01 220);
-  --popover: oklch(0.22 0.05 245);
-  --popover-foreground: oklch(0.96 0.01 220);
-  --navy: oklch(0.27 0.06 245);
-  --accent: oklch(0.88 0.05 195);
-  --accent-foreground: oklch(0.22 0.05 245);
-  --secondary: oklch(0.28 0.05 245);
-  --secondary-foreground: oklch(0.96 0.01 220);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
-  --chart-grid: oklch(1 0 0 / 14%);
-  --muted: oklch(0.28 0.05 245);
-  --muted-foreground: oklch(0.72 0.02 230);
-  --primary-soft: oklch(0.28 0.06 195);
-  --success-soft: oklch(0.26 0.05 180);
-  --warning-soft: oklch(0.30 0.06 80);
+  --background: oklch(0.17 0.008 155);
+  --foreground: oklch(0.95 0.01 155);
+  --surface: oklch(0.2 0.01 155);
+  --surface-muted: oklch(0.23 0.012 155);
+  --card: oklch(0.2 0.01 155);
+  --card-foreground: oklch(0.95 0.01 155);
+  --popover: oklch(0.2 0.01 155);
+  --popover-foreground: oklch(0.95 0.01 155);
+
+  --primary: oklch(0.72 0.17 155);
+  --primary-foreground: oklch(0.18 0.02 155);
+  --primary-soft: oklch(0.28 0.06 155);
+
+  --navy: oklch(0.95 0.01 155);
+
+  --secondary: oklch(0.26 0.015 155);
+  --secondary-foreground: oklch(0.95 0.01 155);
+  --muted: oklch(0.26 0.015 155);
+  --muted-foreground: oklch(0.7 0.02 155);
+  --accent: oklch(0.28 0.04 155);
+  --accent-foreground: oklch(0.95 0.01 155);
+
+  --warning: oklch(0.78 0.14 75);
+  --warning-foreground: oklch(0.95 0.01 155);
+  --warning-soft: oklch(0.3 0.06 80);
+
+  --success: oklch(0.72 0.17 155);
+  --success-soft: oklch(0.28 0.06 155);
+
+  --destructive: oklch(0.65 0.2 25);
+  --destructive-foreground: oklch(1 0 0);
   --destructive-soft: oklch(0.28 0.07 30);
+
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --chart-grid: oklch(1 0 0 / 12%);
+  --ring: oklch(0.72 0.17 155);
+
+  --sidebar: oklch(0.14 0.01 155);
+  --sidebar-foreground: oklch(0.9 0.01 155);
+  --sidebar-muted: oklch(0.62 0.02 155);
+  --sidebar-active: oklch(0.75 0.16 155);
+  --sidebar-active-bg: oklch(0.22 0.03 155);
+  --sidebar-accent: oklch(0.24 0.03 155);
+  --sidebar-accent-foreground: oklch(0.96 0.01 155);
+  --sidebar-border: oklch(1 0 0 / 8%);
+
+  --chart-1: oklch(0.72 0.17 155);
+  --chart-2: oklch(0.65 0.18 30);
+  --chart-3: oklch(0.78 0.14 75);
+  --chart-4: oklch(0.55 0.12 250);
+  --chart-5: oklch(0.6 0.12 145);
 }
 
 @layer base {
-  body, * {
-    font-family: "Inter", sans-serif;
+  * {
+    border-color: var(--color-border);
   }
-  * { border-color: var(--color-border); }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Single hairline dividers — avoid stacking with component border utilities */
-  :not(.dark) table tbody tr:not(:last-child) {
-    border-bottom: 1px solid oklch(0.9 0.01 160);
+  /* Tables: one divider between rows only — never stack with pagination */
+  table.ops-table thead tr {
+    border-bottom: 1px solid var(--color-border);
+  }
+  table.ops-table tbody tr + tr {
+    border-top: 1px solid var(--color-border);
   }
 
-  :not(.dark) table thead tr {
-    border-bottom: 1px solid oklch(0.88 0.01 160);
-  }
-
-  /* Recharts grid & axis detail lines */
   .recharts-cartesian-grid line {
     stroke: var(--chart-grid) !important;
   }
@@ -174,7 +209,9 @@
   .recharts-cartesian-axis-tick text {
     fill: var(--color-muted-foreground);
   }
-  .font-mono, code, .mono { font-family: var(--font-mono); }
+  .font-mono, code, .mono {
+    font-family: var(--font-mono);
+  }
 
   [data-sidebar="content"] {
     scrollbar-width: none;
@@ -188,42 +225,27 @@
 @layer utilities {
   .text-navy { color: var(--color-navy); }
   .dark .text-navy { color: var(--color-foreground); }
-  .dark .bg-accent.text-navy,
-  .dark .bg-accent.text-accent-foreground,
-  .dark .bg-primary-soft.text-navy,
-  .dark .bg-success-soft.text-navy,
-  .dark .bg-warning-soft.text-navy,
-  .dark .bg-destructive-soft.text-navy {
-    color: var(--color-navy);
-  }
   .bg-navy { background-color: var(--color-navy); }
   .shadow-card {
     box-shadow:
-      0 1px 2px 0 rgb(16 24 40 / 0.06),
-      0 4px 8px -2px rgb(16 24 40 / 0.10),
-      0 12px 24px -6px rgb(16 24 40 / 0.08);
+      0 1px 2px 0 rgb(0 0 0 / 0.2),
+      0 4px 12px -2px rgb(0 0 0 / 0.25);
   }
   :not(.dark) .shadow-card {
     box-shadow:
-      0 1px 3px 0 rgb(15 23 42 / 0.08),
-      0 4px 14px -2px rgb(15 23 42 / 0.12),
-      0 10px 24px -6px rgb(15 23 42 / 0.08);
+      0 1px 2px 0 rgb(15 23 42 / 0.05),
+      0 4px 12px -2px rgb(15 23 42 / 0.08);
   }
   .shadow-card-hover {
     box-shadow:
-      0 2px 4px 0 rgb(16 24 40 / 0.08),
-      0 8px 16px -4px rgb(16 24 40 / 0.12),
-      0 20px 40px -8px rgb(16 24 40 / 0.10);
+      0 2px 4px 0 rgb(0 0 0 / 0.25),
+      0 8px 20px -4px rgb(0 0 0 / 0.3);
   }
   .card-interactive {
     transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   }
   .card-interactive:hover {
     background-color: var(--surface-muted);
-    box-shadow:
-      0 2px 4px 0 rgb(16 24 40 / 0.08),
-      0 8px 16px -4px rgb(16 24 40 / 0.12),
-      0 20px 40px -8px rgb(16 24 40 / 0.10);
-    transform: translateY(-2px);
+    transform: translateY(-1px);
   }
 }

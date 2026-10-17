@@ -41,8 +41,8 @@ export function ListPagination({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between",
-        isDark ? "border-white/10" : "border-border",
+        // Spacing only — never border-t (stacked with last table row = double line)
+        "mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
     >

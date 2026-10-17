@@ -65,7 +65,7 @@ export function Card({ title, action, children, className = "", interactive = fa
   return (
     <div className={`rounded-xl border border-border bg-card shadow-card ${interactive ? "card-interactive" : ""} ${className}`}>
       {(title || action) && (
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3.5 sm:px-5 sm:py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3.5 sm:px-5 sm:py-4">
           {title && <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>}
           {action}
         </div>

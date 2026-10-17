@@ -42,8 +42,8 @@ function AppLayout() {
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <TopBar />
-          <main className="flex-1 bg-background overflow-x-hidden">
-            <div className="px-6 py-6 max-w-[1400px] mx-auto">
+          <main className="flex-1 overflow-x-hidden bg-background">
+            <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
               <Outlet />
             </div>
           </main>

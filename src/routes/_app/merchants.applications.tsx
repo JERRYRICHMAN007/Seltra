@@ -111,6 +111,82 @@ function isWaitlistVisible(status: string) {
   return s !== "rejected" && s !== "suspended";
 }
 
+type WaitlistRowView = {
+  id: string;
+  businessName: string;
+  ownerName: string;
+  ownerEmail: string;
+  businessType: string;
+  status: string;
+  appliedAt: string;
+};
+
+function normalizeWaitlistRow(app: Application | { id: string; businessName: string; ownerName: string; ownerEmail: string; businessType: string; status: string; appliedAt: string }): WaitlistRowView {
+  if ("full_name" in app) {
+    const a = app as Application;
+    return {
+      id: a.id,
+      businessName: a.business_name || a.full_name,
+      ownerName: a.full_name,
+      ownerEmail: a.email ?? "—",
+      businessType: a.business_type ?? "—",
+      status: a.status,
+      appliedAt: a.created_at,
+    };
+  }
+  return {
+    id: app.id,
+    businessName: app.businessName,
+    ownerName: app.ownerName,
+    ownerEmail: app.ownerEmail,
+    businessType: app.businessType,
+    status: app.status || "pending",
+    appliedAt: app.appliedAt,
+  };
+}
+
+function WaitlistActions({
+  status,
+  approvePending,
+  rejectPending,
+  onApprove,
+  onReject,
+}: {
+  status: string;
+  appId: string;
+  approvePending: boolean;
+  rejectPending: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  const s = status.toLowerCase();
+  const canApprove = s === "pending" || s === "applied" || s === "reviewed";
+  const isOnboarded = s === "approved" || s === "onboarded";
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {isOnboarded ? (
+        <span className="pointer-events-none inline-flex select-none items-center rounded-md bg-success-soft px-2 py-1 text-xs font-medium text-primary">
+          Onboarded
+        </span>
+      ) : (
+        <Button size="sm" variant="outline" disabled={approvePending || !canApprove} onClick={onApprove}>
+          Approve
+        </Button>
+      )}
+      <Button
+        size="sm"
+        variant="outline"
+        className="border-destructive/40 text-destructive hover:bg-destructive hover:text-white"
+        disabled={rejectPending}
+        onClick={onReject}
+      >
+        Reject
+      </Button>
+    </div>
+  );
+}
+
 function ApplicationsOnboardingPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -151,10 +227,27 @@ function ApplicationsOnboardingPage() {
 
   const applicationRows = applicationsResult?.rows ?? applicationsFromSupabase(fallbackApplications, { search: appSearch }).rows;
 
-  const waitlistAll = useMemo(
-    () => applicationRows.filter((a) => isWaitlistVisible(a.status)),
-    [applicationRows],
-  );
+  const waitlistAll = useMemo(() => {
+    const priority = (status: string) => {
+      const s = status.toLowerCase();
+      if (s === "pending" || s === "applied" || s === "reviewed") return 0;
+      if (s === "approved" || s === "onboarded") return 1;
+      return 2;
+    };
+    const appliedTime = (row: (typeof applicationRows)[number]) => {
+      const raw = "appliedAt" in row ? row.appliedAt : (row as Application).created_at;
+      return new Date(raw).getTime() || 0;
+    };
+
+    return applicationRows
+      .filter((a) => isWaitlistVisible(a.status))
+      .slice()
+      .sort((a, b) => {
+        const byStatus = priority(a.status) - priority(b.status);
+        if (byStatus !== 0) return byStatus;
+        return appliedTime(b) - appliedTime(a);
+      });
+  }, [applicationRows]);
 
   const isLoading = applicationsLoading || (applicationsApiFailed && fallbackApplicationsLoading);
 
@@ -247,7 +340,7 @@ function ApplicationsOnboardingPage() {
             placeholder="Search applications…"
             value={appSearch}
             onChange={(e) => setAppSearch(e.target.value)}
-            className="max-w-sm bg-surface-muted border-input"
+            className="w-full max-w-md border-input bg-surface-muted"
           />
         </div>
         {isLoading ? (
@@ -258,107 +351,87 @@ function ApplicationsOnboardingPage() {
           </div>
         ) : (
         <>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        {/* Mobile cards */}
+        <div className="space-y-3 md:hidden">
+          {tableRows.map((app) => {
+            const row = normalizeWaitlistRow(app);
+            return (
+              <div key={row.id} className="rounded-lg border border-border bg-surface p-3.5">
+                <div className="flex items-start gap-3">
+                  <MerchantAvatar name={row.businessName} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-foreground">{row.businessName}</span>
+                      <StatusBadge status={row.status} />
+                    </div>
+                    <div className="mt-0.5 text-sm text-foreground/90">{row.ownerName}</div>
+                    <div className="truncate text-xs text-muted-foreground">{row.ownerEmail}</div>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <span>{row.businessType}</span>
+                      <span>Applied {shortDate(row.appliedAt)}</span>
+                    </div>
+                    <div className="mt-3">
+                      <WaitlistActions
+                        status={row.status}
+                        appId={row.id}
+                        approvePending={approveMutation.isPending}
+                        rejectPending={rejectMutation.isPending}
+                        onApprove={() => approveMutation.mutate(row.id)}
+                        onReject={() => openRejectDialog(row.id)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {!tableRows.length && (
+            <p className="py-8 text-center text-xs text-muted-foreground">No applications in the pipeline.</p>
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="-mx-4 hidden overflow-x-auto md:mx-0 md:block">
+          <table className="w-full min-w-[720px] text-sm">
             <thead>
-              <tr className="text-left text-xs font-mono uppercase tracking-wider text-muted-foreground border-b border-border">
-                <th className="py-2 pr-4">Business name</th>
-                <th className="py-2 pr-4">Owner</th>
-                <th className="py-2 pr-4">Type</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2 pr-4">Applied</th>
-                <th className="py-2 pr-4">Actions</th>
+              <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="pb-2.5 pr-4 font-medium">Business name</th>
+                <th className="pb-2.5 pr-4 font-medium">Owner</th>
+                <th className="pb-2.5 pr-4 font-medium">Type</th>
+                <th className="pb-2.5 pr-4 font-medium">Status</th>
+                <th className="pb-2.5 pr-4 font-medium">Applied</th>
+                <th className="pb-2.5 pr-4 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {tableRows.map((app) => {
-                const isFallbackApp = "full_name" in app;
-                const businessName = isFallbackApp
-                  ? (app as Application).business_name || (app as Application).full_name
-                  : app.businessName;
-                const ownerName = isFallbackApp ? (app as Application).full_name : app.ownerName;
-                const ownerEmail = isFallbackApp ? (app as Application).email ?? "—" : app.ownerEmail;
-                const businessType = isFallbackApp ? (app as Application).business_type ?? "—" : app.businessType;
-                const appliedAt = isFallbackApp ? (app as Application).created_at : app.appliedAt;
-                const status = (isFallbackApp ? (app as Application).status : app.status || "pending").toLowerCase();
-                const appId = app.id;
-
+                const row = normalizeWaitlistRow(app);
                 return (
-                  <tr key={appId} className="border-b border-border hover:bg-surface-muted/50">
+                  <tr key={row.id} className="hover:bg-surface-muted/60">
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-2.5">
-                        <MerchantAvatar name={businessName} />
-                        <span className="font-medium text-navy">{businessName}</span>
+                        <MerchantAvatar name={row.businessName} />
+                        <span className="font-medium text-foreground">{row.businessName}</span>
                       </div>
                     </td>
                     <td className="py-3 pr-4">
-                      <div>{ownerName}</div>
-                      <div className="text-xs text-muted-foreground">{ownerEmail}</div>
+                      <div className="text-foreground">{row.ownerName}</div>
+                      <div className="text-xs text-muted-foreground">{row.ownerEmail}</div>
                     </td>
-                    <td className="py-3 pr-4 text-muted-foreground">{businessType}</td>
+                    <td className="py-3 pr-4 text-muted-foreground">{row.businessType}</td>
                     <td className="py-3 pr-4">
-                      <StatusBadge status={isFallbackApp ? (app as Application).status : app.status} />
+                      <StatusBadge status={row.status} />
                     </td>
-                    <td className="py-3 pr-4 text-muted-foreground">{shortDate(appliedAt)}</td>
+                    <td className="py-3 pr-4 text-muted-foreground">{shortDate(row.appliedAt)}</td>
                     <td className="py-3 pr-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {status === "pending" || status === "applied" || status === "reviewed" ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={approveMutation.isPending}
-                              onClick={() => approveMutation.mutate(appId)}
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-destructive border-destructive hover:bg-destructive hover:text-white"
-                              disabled={rejectMutation.isPending}
-                              onClick={() => openRejectDialog(appId)}
-                            >
-                              Reject
-                            </Button>
-                          </>
-                        ) : status === "approved" || status === "onboarded" ? (
-                          <>
-                            <span className="inline-flex items-center rounded-md bg-success-soft px-2 py-1 text-xs font-medium text-primary pointer-events-none select-none">
-                              Onboarded
-                            </span>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-destructive border-destructive hover:bg-destructive hover:text-white"
-                              disabled={rejectMutation.isPending}
-                              onClick={() => openRejectDialog(appId)}
-                            >
-                              Reject
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={approveMutation.isPending}
-                              onClick={() => approveMutation.mutate(appId)}
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-destructive border-destructive hover:bg-destructive hover:text-white"
-                              disabled={rejectMutation.isPending}
-                              onClick={() => openRejectDialog(appId)}
-                            >
-                              Reject
-                            </Button>
-                          </>
-                        )}
-                      </div>
+                      <WaitlistActions
+                        status={row.status}
+                        appId={row.id}
+                        approvePending={approveMutation.isPending}
+                        rejectPending={rejectMutation.isPending}
+                        onApprove={() => approveMutation.mutate(row.id)}
+                        onReject={() => openRejectDialog(row.id)}
+                      />
                     </td>
                   </tr>
                 );
@@ -380,7 +453,7 @@ function ApplicationsOnboardingPage() {
             pageSize={waitlistPageSize}
             onPageChange={setWaitlistPage}
             itemLabel="applications"
-            className="mt-4 px-0"
+            className="mt-4 border-t-0 px-0 pt-3"
           />
         </>
         )}

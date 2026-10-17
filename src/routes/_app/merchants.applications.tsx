@@ -241,25 +241,16 @@ function ApplicationsOnboardingPage() {
   const applicationRows = applicationsResult?.rows ?? applicationsFromSupabase(fallbackApplications, { search: appSearch }).rows;
 
   const waitlistAll = useMemo(() => {
-    const priority = (status: string) => {
-      const s = status.toLowerCase();
-      if (s === "pending" || s === "applied" || s === "reviewed") return 0;
-      if (s === "approved" || s === "onboarded") return 1;
-      return 2;
-    };
     const appliedTime = (row: (typeof applicationRows)[number]) => {
       const raw = "appliedAt" in row ? row.appliedAt : (row as Application).created_at;
       return new Date(raw).getTime() || 0;
     };
 
+    // Newest applications at the top
     return applicationRows
       .filter((a) => isWaitlistVisible(a.status))
       .slice()
-      .sort((a, b) => {
-        const byStatus = priority(a.status) - priority(b.status);
-        if (byStatus !== 0) return byStatus;
-        return appliedTime(b) - appliedTime(a);
-      });
+      .sort((a, b) => appliedTime(b) - appliedTime(a));
   }, [applicationRows]);
 
   const isLoading = applicationsLoading || (applicationsApiFailed && fallbackApplicationsLoading);

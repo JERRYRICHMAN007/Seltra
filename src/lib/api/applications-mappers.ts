@@ -62,13 +62,6 @@ export function applicationsFromSupabase(
     );
   });
 
-  const statusRank = (status: string) => {
-    const s = (status || "").toLowerCase();
-    if (s === "pending" || s === "applied" || s === "reviewed") return 0;
-    if (s === "approved" || s === "onboarded") return 1;
-    return 2;
-  };
-
   const rows: ApplicationRow[] = filtered
     .map((app) => ({
       id: app.id,
@@ -79,11 +72,7 @@ export function applicationsFromSupabase(
       status: app.status,
       appliedAt: app.created_at,
     }))
-    .sort((a, b) => {
-      const byStatus = statusRank(a.status) - statusRank(b.status);
-      if (byStatus !== 0) return byStatus;
-      return new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime();
-    });
+    .sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());
 
   return {
     page: 1,

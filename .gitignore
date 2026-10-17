@@ -42,4 +42,3 @@ supabase/.temp/
 .vercel
 
 bun.lock
-.env*
